@@ -1,4 +1,4 @@
-package com.example.projekt.Ustawienia
+package com.example.projekt
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,7 +19,7 @@ import com.example.projekt.ui.theme.ProjektTheme
 @Composable
 fun SettingsScreen(
     useDarkTheme: Boolean,
-    onThemeToggle: (Boolean) -> Unit,
+    onThemeToggle: (Boolean) -> Unit, // Oczekiwana funkcja zapisu
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -26,17 +27,22 @@ fun SettingsScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
+        Text("Ustawienia", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(bottom = 16.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(text = "Tryb Ciemny")
+
             Switch(
                 checked = useDarkTheme,
-                onCheckedChange = onThemeToggle
+                onCheckedChange = onThemeToggle // To wywołuje coroutine zapisu w MainActivity!
             )
         }
+
+        // Można dodać inne opcje ustawień tutaj
     }
 }
 
@@ -44,7 +50,6 @@ fun SettingsScreen(
 @Composable
 fun SettingsScreenPreview() {
     ProjektTheme {
-        SettingsScreen(useDarkTheme = true, onThemeToggle = {})
+        SettingsScreen(useDarkTheme = false, onThemeToggle = {})
     }
 }
-

@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme // Upewnij się, że ten import jest
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -16,45 +16,72 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
-import com.example.projekt.Konto.AccountScreen
-import com.example.projekt.home.HomeScreen
-import com.example.projekt.Ustawienia.SettingsScreen
+import kotlinx.coroutines.launch
 import com.example.projekt.ui.theme.ProjektTheme
 
+// Importy dla Compose Delegating (konieczne, jeśli nie używasz jawnego dostępu .value)
+import androidx.compose.runtime.setValue
+
+
 class MainActivity : ComponentActivity() {
+
+    // Używamy lateinit do bezpiecznej inicjalizacji (Omija problem 'by lazy')
+    private lateinit var themePreferenceManager: ThemePreferenceManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Menedżer preferencji jest tworzony w onCreate
+        // Zakładamy, że masz plik ThemePreferenceManager.kt w tym samym pakiecie
+        themePreferenceManager = ThemePreferenceManager(applicationContext)
+
         enableEdgeToEdge()
         setContent {
-            // 1. Stan motywu "wyniesiony" (hoisted) na najwyższy poziom
-            val systemIsDark = isSystemInDarkTheme()
-            var useDarkTheme by rememberSaveable { mutableStateOf(systemIsDark) }
 
-            // 2. Przekazanie stanu do ProjektTheme, aby zastosować motyw
-            ProjektTheme(darkTheme = useDarkTheme) {
+            // TRWAŁY ODCZYT: Odczytanie zapisanego stanu motywu
+            val isDarkTheme by themePreferenceManager.isDarkTheme.collectAsState(
+                initial = isSystemInDarkTheme()
+            )
+
+            // UTWORZENIE SCOPE: Potrzebne do wywołania funkcji zapisu DataStore
+            val coroutineScope = rememberCoroutineScope()
+
+            // Przekazanie stanu do ProjektTheme
+            ProjektTheme(darkTheme = isDarkTheme) {
                 ProjektApp(
-                    // 3. Przekazanie stanu i funkcji do jego zmiany do aplikacji
-                    useDarkTheme = useDarkTheme,
-                    onThemeToggle = { useDarkTheme = it }
+                    // Przekazujemy odczytany TRWAŁY stan:
+                    useDarkTheme = isDarkTheme,
+
+                    // Funkcja do trwałego ZAPISU stanu
+                    onThemeToggle = { newThemeState ->
+                        coroutineScope.launch {
+                            themePreferenceManager.setDarkTheme(newThemeState)
+                        }
+                    }
                 )
             }
         }
     }
 }
 
+
 @Composable
 fun ProjektApp(
     useDarkTheme: Boolean,
-    onThemeToggle: (Boolean) -> Unit // Funkcja do zmiany motywu
+    onThemeToggle: (Boolean) -> Unit
 ) {
-    var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
+    // Używamy jawnego dostępu do stanu (val/val) zamiast delegowania (by),
+    // aby uniknąć problemów z getValue/setValue
+    val currentDestinationState = rememberSaveable { mutableStateOf(AppDestinations.HOME) }
+    val currentDestination = currentDestinationState.value
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -68,13 +95,12 @@ fun ProjektApp(
                     },
                     label = { Text(it.label) },
                     selected = it == currentDestination,
-                    onClick = { currentDestination = it }
+                    onClick = { currentDestinationState.value = it } // Zapis przez .value
                 )
             }
         }
     ) {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-            // 4. Wyświetlanie innego ekranu w zależności od wybranej nawigacji
             when (currentDestination) {
                 AppDestinations.HOME -> HomeScreen(modifier = Modifier.padding(innerPadding))
                 AppDestinations.ACCOUNT -> AccountScreen(modifier = Modifier.padding(innerPadding))

@@ -1,4 +1,4 @@
-package com.example.projekt.Konto
+package com.example.projekt
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,4 +32,3 @@ fun AccountScreenPreview() {
         AccountScreen()
     }
 }
-
