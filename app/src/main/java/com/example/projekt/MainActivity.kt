@@ -1,9 +1,13 @@
 package com.example.projekt
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -18,96 +22,134 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
-import kotlinx.coroutines.launch
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.example.projekt.ui.theme.ProjektTheme
-
-// Importy dla Compose Delegating (konieczne, jeśli nie używasz jawnego dostępu .value)
-import androidx.compose.runtime.setValue
-
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    // Używamy lateinit do bezpiecznej inicjalizacji (Omija problem 'by lazy')
     private lateinit var themePreferenceManager: ThemePreferenceManager
+    private lateinit var stepCounter: StepCounter
+
+    private var steps by mutableIntStateOf(0)
+
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            startStepCounter()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Menedżer preferencji jest tworzony w onCreate
-        // Zakładamy, że masz plik ThemePreferenceManager.kt w tym samym pakiecie
         themePreferenceManager = ThemePreferenceManager(applicationContext)
+        stepCounter = StepCounter(applicationContext)
+
+        if (stepCounter.isSensorAvailable()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val hasPermission = ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACTIVITY_RECOGNITION
+                ) == PackageManager.PERMISSION_GRANTED
+
+                if (hasPermission) {
+                    startStepCounter()
+                } else {
+                    requestPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                }
+            } else {
+                startStepCounter()
+            }
+        }
 
         enableEdgeToEdge()
         setContent {
-
-            // TRWAŁY ODCZYT: Odczytanie zapisanego stanu motywu
             val isDarkTheme by themePreferenceManager.isDarkTheme.collectAsState(
                 initial = isSystemInDarkTheme()
             )
+            val isMetric by themePreferenceManager.isMetric.collectAsState(initial = true)
+            val stepGoal by themePreferenceManager.stepGoal.collectAsState(initial = 10000)
 
-            // UTWORZENIE SCOPE: Potrzebne do wywołania funkcji zapisu DataStore
             val coroutineScope = rememberCoroutineScope()
 
-            // Przekazanie stanu do ProjektTheme
             ProjektTheme(darkTheme = isDarkTheme) {
                 ProjektApp(
-                    // Przekazujemy odczytany TRWAŁY stan:
                     useDarkTheme = isDarkTheme,
-
-                    // Funkcja do trwałego ZAPISU stanu
-                    onThemeToggle = { newThemeState ->
-                        coroutineScope.launch {
-                            themePreferenceManager.setDarkTheme(newThemeState)
-                        }
-                    }
+                    onThemeToggle = { coroutineScope.launch { themePreferenceManager.setDarkTheme(it) } },
+                    useMetric = isMetric,
+                    onMetricToggle = { coroutineScope.launch { themePreferenceManager.setMetric(it) } },
+                    steps = steps,
+                    stepGoal = stepGoal,
+                    onStepGoalChange = { coroutineScope.launch { themePreferenceManager.setStepGoal(it) } }
                 )
+            }
+        }
+    }
+
+    private fun startStepCounter() {
+        lifecycleScope.launch {
+            stepCounter.steps.collect { sessionSteps ->
+                steps = sessionSteps
             }
         }
     }
 }
 
-
 @Composable
 fun ProjektApp(
     useDarkTheme: Boolean,
-    onThemeToggle: (Boolean) -> Unit
+    onThemeToggle: (Boolean) -> Unit,
+    useMetric: Boolean,
+    onMetricToggle: (Boolean) -> Unit,
+    steps: Int,
+    stepGoal: Int,
+    onStepGoalChange: (Int) -> Unit
 ) {
-    // Używamy jawnego dostępu do stanu (val/val) zamiast delegowania (by),
-    // aby uniknąć problemów z getValue/setValue
     val currentDestinationState = rememberSaveable { mutableStateOf(AppDestinations.HOME) }
     val currentDestination = currentDestinationState.value
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
-            AppDestinations.entries.forEach {
+            for (destination in AppDestinations.entries) {
                 item(
-                    icon = {
-                        Icon(
-                            it.icon,
-                            contentDescription = it.label
-                        )
-                    },
-                    label = { Text(it.label) },
-                    selected = it == currentDestination,
-                    onClick = { currentDestinationState.value = it } // Zapis przez .value
+                    icon = { Icon(destination.icon, contentDescription = destination.label) },
+                    label = { Text(destination.label) },
+                    selected = destination == currentDestination,
+                    onClick = { currentDestinationState.value = destination }
                 )
             }
         }
     ) {
-        Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+        Scaffold(modifier = Modifier.fillMaxSize()) { scaffoldPadding ->
             when (currentDestination) {
-                AppDestinations.HOME -> HomeScreen(modifier = Modifier.padding(innerPadding))
-                AppDestinations.ACCOUNT -> AccountScreen(modifier = Modifier.padding(innerPadding))
+                AppDestinations.HOME -> HomeScreen(
+                    useMetric = useMetric,
+                    steps = steps,
+                    stepGoal = stepGoal,
+                    modifier = Modifier.padding(scaffoldPadding)
+                )
+                AppDestinations.ACCOUNT -> AccountScreen(
+                    currentStepGoal = stepGoal,
+                    onStepGoalChange = onStepGoalChange,
+                    modifier = Modifier.padding(scaffoldPadding)
+                )
                 AppDestinations.SETTINGS -> SettingsScreen(
                     useDarkTheme = useDarkTheme,
                     onThemeToggle = onThemeToggle,
-                    modifier = Modifier.padding(innerPadding)
+                    useMetric = useMetric,
+                    onMetricToggle = onMetricToggle,
+                    modifier = Modifier.padding(scaffoldPadding)
                 )
             }
         }
@@ -129,7 +171,12 @@ fun ProjektAppPreview() {
     ProjektTheme {
         ProjektApp(
             useDarkTheme = false,
-            onThemeToggle = {}
+            onThemeToggle = {},
+            useMetric = true,
+            onMetricToggle = {},
+            steps = 12345,
+            stepGoal = 10000,
+            onStepGoalChange = {}
         )
     }
 }

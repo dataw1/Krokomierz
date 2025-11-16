@@ -3,8 +3,10 @@ package com.example.projekt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -19,7 +21,9 @@ import com.example.projekt.ui.theme.ProjektTheme
 @Composable
 fun SettingsScreen(
     useDarkTheme: Boolean,
-    onThemeToggle: (Boolean) -> Unit, // Oczekiwana funkcja zapisu
+    onThemeToggle: (Boolean) -> Unit,
+    useMetric: Boolean,
+    onMetricToggle: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -38,11 +42,24 @@ fun SettingsScreen(
 
             Switch(
                 checked = useDarkTheme,
-                onCheckedChange = onThemeToggle // To wywołuje coroutine zapisu w MainActivity!
+                onCheckedChange = onThemeToggle
             )
         }
 
-        // Można dodać inne opcje ustawień tutaj
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(text = "Jednostki Metryczne (km)")
+
+            Switch(
+                checked = useMetric,
+                onCheckedChange = onMetricToggle
+            )
+        }
     }
 }
 
@@ -50,6 +67,11 @@ fun SettingsScreen(
 @Composable
 fun SettingsScreenPreview() {
     ProjektTheme {
-        SettingsScreen(useDarkTheme = false, onThemeToggle = {})
+        SettingsScreen(
+            useDarkTheme = false,
+            onThemeToggle = {},
+            useMetric = true,
+            onMetricToggle = {}
+        )
     }
 }
