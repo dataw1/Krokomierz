@@ -74,7 +74,7 @@ class StepCounter(private val context: Context) {
                 sensorManager.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_NORMAL)
                 awaitClose { sensorManager.unregisterListener(listener) }
             } else {
-                close(IllegalStateException("No Step Counter or Accelerometer available"))
+                close(IllegalStateException("Brak dostępnego licznika kroków lub akcelerometru"))
             }
         }
     }

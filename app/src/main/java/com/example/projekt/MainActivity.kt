@@ -39,8 +39,10 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var themePreferenceManager: ThemePreferenceManager
     private lateinit var stepCounter: StepCounter
+    private lateinit var gyroscopeManager: GyroscopeManager
 
     private var steps by mutableIntStateOf(0)
+    private var gyroscopeData by mutableStateOf(GyroscopeData(0f, 0f, 0f))
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -55,6 +57,7 @@ class MainActivity : ComponentActivity() {
 
         themePreferenceManager = ThemePreferenceManager(applicationContext)
         stepCounter = StepCounter(applicationContext)
+        gyroscopeManager = GyroscopeManager(applicationContext)
 
         if (stepCounter.isSensorAvailable()) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -71,6 +74,10 @@ class MainActivity : ComponentActivity() {
             } else {
                 startStepCounter()
             }
+        }
+
+        if (gyroscopeManager.isGyroscopeAvailable()) {
+            startGyroscope()
         }
 
         enableEdgeToEdge()
@@ -91,7 +98,8 @@ class MainActivity : ComponentActivity() {
                     onMetricToggle = { coroutineScope.launch { themePreferenceManager.setMetric(it) } },
                     steps = steps,
                     stepGoal = stepGoal,
-                    onStepGoalChange = { coroutineScope.launch { themePreferenceManager.setStepGoal(it) } }
+                    onStepGoalChange = { coroutineScope.launch { themePreferenceManager.setStepGoal(it) } },
+                    gyroscopeData = gyroscopeData
                 )
             }
         }
@@ -101,6 +109,14 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             stepCounter.steps.collect { sessionSteps ->
                 steps = sessionSteps
+            }
+        }
+    }
+
+    private fun startGyroscope() {
+        lifecycleScope.launch {
+            gyroscopeManager.rotationData.collect { data ->
+                gyroscopeData = data
             }
         }
     }
@@ -114,7 +130,8 @@ fun ProjektApp(
     onMetricToggle: (Boolean) -> Unit,
     steps: Int,
     stepGoal: Int,
-    onStepGoalChange: (Int) -> Unit
+    onStepGoalChange: (Int) -> Unit,
+    gyroscopeData: GyroscopeData
 ) {
     val currentDestinationState = rememberSaveable { mutableStateOf(AppDestinations.HOME) }
     val currentDestination = currentDestinationState.value
@@ -142,6 +159,7 @@ fun ProjektApp(
                 AppDestinations.ACCOUNT -> AccountScreen(
                     currentStepGoal = stepGoal,
                     onStepGoalChange = onStepGoalChange,
+                    gyroscopeData = gyroscopeData,
                     modifier = Modifier.padding(scaffoldPadding)
                 )
                 AppDestinations.SETTINGS -> SettingsScreen(
@@ -160,7 +178,7 @@ enum class AppDestinations(
     val label: String,
     val icon: ImageVector,
 ) {
-    HOME("Home", Icons.Default.Home),
+    HOME("Główna", Icons.Default.Home),
     ACCOUNT("Konto", Icons.Default.AccountBox),
     SETTINGS("Ustawienia", Icons.Default.Settings),
 }
@@ -176,7 +194,8 @@ fun ProjektAppPreview() {
             onMetricToggle = {},
             steps = 12345,
             stepGoal = 10000,
-            onStepGoalChange = {}
+            onStepGoalChange = {},
+            gyroscopeData = GyroscopeData(0.1f, 0.2f, 0.3f)
         )
     }
 }

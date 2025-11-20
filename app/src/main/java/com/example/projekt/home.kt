@@ -37,6 +37,7 @@ fun HomeScreen(
 ) {
     var selectedPeriod by remember { mutableStateOf(TimePeriod.DAY) }
     val stepLengthCm = 80 // Długość kroku w cm
+    val caloriesPerStep = 0.04f // Średnia liczba spalonych kalorii na krok
 
     var currentTime by remember { mutableStateOf("") }
     val chartData = remember { mutableStateListOf<StepData>() }
@@ -62,6 +63,7 @@ fun HomeScreen(
     }
     val distanceFormatted = "%.2f".format(distance)
     val distanceUnit = if (useMetric) "km" else "mi"
+    val caloriesBurned = steps * caloriesPerStep
 
     Column(
         modifier = modifier
@@ -103,6 +105,7 @@ fun HomeScreen(
                 }
                 Spacer(Modifier.height(4.dp))
                 Text("Dystans: $distanceFormatted $distanceUnit", style = MaterialTheme.typography.bodyMedium)
+                Text("Spalone kalorie: %.0f kcal".format(caloriesBurned), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(16.dp))
                 LinearProgressIndicator(
                     progress = { (steps.toFloat() / stepGoal.toFloat()).coerceIn(0f, 1f) },

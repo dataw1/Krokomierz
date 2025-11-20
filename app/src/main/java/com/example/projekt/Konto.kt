@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.Divider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +27,7 @@ import com.example.projekt.ui.theme.ProjektTheme
 fun AccountScreen(
     currentStepGoal: Int,
     onStepGoalChange: (Int) -> Unit,
+    gyroscopeData: GyroscopeData,
     modifier: Modifier = Modifier
 ) {
     var textValue by remember(currentStepGoal) { mutableStateOf(currentStepGoal.toString()) }
@@ -35,8 +37,8 @@ fun AccountScreen(
             .padding(16.dp)
             .fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
     ) {
+        // Step Goal Section
         Text("Ustaw Cel Kroków")
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -55,6 +57,17 @@ fun AccountScreen(
         ) {
             Text("Zapisz Cel")
         }
+
+        Spacer(modifier = Modifier.height(32.dp))
+        Divider()
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Gyroscope Section
+        Text("Dane z Żyroskopu")
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(text = "Oś X: %.2f rad/s".format(gyroscopeData.x))
+        Text(text = "Oś Y: %.2f rad/s".format(gyroscopeData.y))
+        Text(text = "Oś Z: %.2f rad/s".format(gyroscopeData.z))
     }
 }
 
@@ -62,6 +75,10 @@ fun AccountScreen(
 @Composable
 fun AccountScreenPreview() {
     ProjektTheme {
-        AccountScreen(currentStepGoal = 10000, onStepGoalChange = {})
+        AccountScreen(
+            currentStepGoal = 10000, 
+            onStepGoalChange = {},
+            gyroscopeData = GyroscopeData(0.123f, 0.456f, 0.789f)
+        )
     }
 }
