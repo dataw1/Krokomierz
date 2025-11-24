@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     ProjektApp(
                         userName = userName!!,
+                        onUserNameChange = { coroutineScope.launch { themePreferenceManager.setUserName(it) } },
                         useDarkTheme = isDarkTheme,
                         onThemeToggle = { coroutineScope.launch { themePreferenceManager.setDarkTheme(it) } },
                         useMetric = isMetric,
@@ -112,7 +113,8 @@ class MainActivity : ComponentActivity() {
                         steps = steps,
                         stepGoal = stepGoal,
                         onStepGoalChange = { coroutineScope.launch { themePreferenceManager.setStepGoal(it) } },
-                        gyroscopeData = gyroscopeData
+                        gyroscopeData = gyroscopeData,
+                        onResetName = { coroutineScope.launch { themePreferenceManager.setUserName("") } }
                     )
                 }
             }
@@ -138,30 +140,32 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun WelcomeScreen(onNameProvided: (String) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("Witaj!", style = MaterialTheme.typography.headlineLarge)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("Podaj swoje imię, abyśmy mogli Cię przywitać.")
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text("Twoje imię") },
-            singleLine = true
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = { onNameProvided(name) },
-            enabled = name.isNotBlank()
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        var name by remember { mutableStateOf("") }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Zaczynajmy!")
+            Text("Witaj!", style = MaterialTheme.typography.headlineLarge)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Podaj swoje imię, abyśmy mogli Cię przywitać.")
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Twoje imię") },
+                singleLine = true
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = { onNameProvided(name) },
+                enabled = name.isNotBlank()
+            ) {
+                Text("Zaczynajmy!")
+            }
         }
     }
 }
@@ -169,6 +173,7 @@ fun WelcomeScreen(onNameProvided: (String) -> Unit) {
 @Composable
 fun ProjektApp(
     userName: String,
+    onUserNameChange: (String) -> Unit,
     useDarkTheme: Boolean,
     onThemeToggle: (Boolean) -> Unit,
     useMetric: Boolean,
@@ -176,7 +181,8 @@ fun ProjektApp(
     steps: Int,
     stepGoal: Int,
     onStepGoalChange: (Int) -> Unit,
-    gyroscopeData: GyroscopeData
+    gyroscopeData: GyroscopeData,
+    onResetName: () -> Unit
 ) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
 
@@ -204,6 +210,8 @@ fun ProjektApp(
                 modifier = Modifier.padding(scaffoldPadding)
             )
             AppDestinations.ACCOUNT -> AccountScreen(
+                userName = userName,
+                onUserNameChange = onUserNameChange,
                 currentStepGoal = stepGoal,
                 onStepGoalChange = onStepGoalChange,
                 gyroscopeData = gyroscopeData,
@@ -214,6 +222,7 @@ fun ProjektApp(
                 onThemeToggle = onThemeToggle,
                 useMetric = useMetric,
                 onMetricToggle = onMetricToggle,
+                onResetName = onResetName,
                 modifier = Modifier.padding(scaffoldPadding)
             )
         }
@@ -235,6 +244,7 @@ fun ProjektAppPreview() {
     ProjektTheme {
         ProjektApp(
             userName = "Użytkownik",
+            onUserNameChange = {},
             useDarkTheme = false,
             onThemeToggle = {},
             useMetric = true,
@@ -242,7 +252,8 @@ fun ProjektAppPreview() {
             steps = 12345,
             stepGoal = 10000,
             onStepGoalChange = {},
-            gyroscopeData = GyroscopeData(0.1f, 0.2f, 0.3f)
+            gyroscopeData = GyroscopeData(0.1f, 0.2f, 0.3f),
+            onResetName = {}
         )
     }
 }

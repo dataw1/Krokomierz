@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -24,6 +25,7 @@ fun SettingsScreen(
     onThemeToggle: (Boolean) -> Unit,
     useMetric: Boolean,
     onMetricToggle: (Boolean) -> Unit,
+    onResetName: () -> Unit, // Re-adding the callback for resetting the name
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -60,6 +62,13 @@ fun SettingsScreen(
                 onCheckedChange = onMetricToggle
             )
         }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Re-adding the Reset Name Button for demonstration purposes
+        Button(onClick = onResetName) {
+            Text("Zresetuj imię (dla dema)")
+        }
     }
 }
 
@@ -71,7 +80,8 @@ fun SettingsScreenPreview() {
             useDarkTheme = false,
             onThemeToggle = {},
             useMetric = true,
-            onMetricToggle = {}
+            onMetricToggle = {},
+            onResetName = {} // Add to preview
         )
     }
 }

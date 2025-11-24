@@ -25,12 +25,15 @@ import com.example.projekt.ui.theme.ProjektTheme
 
 @Composable
 fun AccountScreen(
+    userName: String,
+    onUserNameChange: (String) -> Unit,
     currentStepGoal: Int,
     onStepGoalChange: (Int) -> Unit,
     gyroscopeData: GyroscopeData,
     modifier: Modifier = Modifier
 ) {
-    var textValue by remember(currentStepGoal) { mutableStateOf(currentStepGoal.toString()) }
+    var nameValue by remember(userName) { mutableStateOf(userName) }
+    var stepGoalValue by remember(currentStepGoal) { mutableStateOf(currentStepGoal.toString()) }
 
     Column(
         modifier = modifier
@@ -38,13 +41,34 @@ fun AccountScreen(
             .fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // User Name Section
+        Text("Zmień Imię")
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = nameValue,
+            onValueChange = { nameValue = it },
+            label = { Text("Twoje imię") },
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = { onUserNameChange(nameValue) },
+            enabled = nameValue.isNotBlank()
+        ) {
+            Text("Zapisz Imię")
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+        Divider()
+        Spacer(modifier = Modifier.height(32.dp))
+
         // Step Goal Section
         Text("Ustaw Cel Kroków")
         Spacer(modifier = Modifier.height(16.dp))
 
         OutlinedTextField(
-            value = textValue,
-            onValueChange = { textValue = it.filter { char -> char.isDigit() } },
+            value = stepGoalValue,
+            onValueChange = { stepGoalValue = it.filter { char -> char.isDigit() } },
             label = { Text("Dzienny cel kroków") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
         )
@@ -52,8 +76,8 @@ fun AccountScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
-            onClick = { textValue.toIntOrNull()?.let { onStepGoalChange(it) } },
-            enabled = textValue.isNotBlank()
+            onClick = { stepGoalValue.toIntOrNull()?.let { onStepGoalChange(it) } },
+            enabled = stepGoalValue.isNotBlank()
         ) {
             Text("Zapisz Cel")
         }
@@ -76,6 +100,8 @@ fun AccountScreen(
 fun AccountScreenPreview() {
     ProjektTheme {
         AccountScreen(
+            userName = "Użytkownik",
+            onUserNameChange = {},
             currentStepGoal = 10000, 
             onStepGoalChange = {},
             gyroscopeData = GyroscopeData(0.123f, 0.456f, 0.789f)
