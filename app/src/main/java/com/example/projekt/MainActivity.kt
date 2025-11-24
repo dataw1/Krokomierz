@@ -9,27 +9,31 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.tooling.preview.PreviewScreenSizes
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.projekt.ui.theme.ProjektTheme
@@ -87,20 +91,30 @@ class MainActivity : ComponentActivity() {
             )
             val isMetric by themePreferenceManager.isMetric.collectAsState(initial = true)
             val stepGoal by themePreferenceManager.stepGoal.collectAsState(initial = 10000)
+            val userName by themePreferenceManager.userName.collectAsState(initial = null)
 
             val coroutineScope = rememberCoroutineScope()
 
             ProjektTheme(darkTheme = isDarkTheme) {
-                ProjektApp(
-                    useDarkTheme = isDarkTheme,
-                    onThemeToggle = { coroutineScope.launch { themePreferenceManager.setDarkTheme(it) } },
-                    useMetric = isMetric,
-                    onMetricToggle = { coroutineScope.launch { themePreferenceManager.setMetric(it) } },
-                    steps = steps,
-                    stepGoal = stepGoal,
-                    onStepGoalChange = { coroutineScope.launch { themePreferenceManager.setStepGoal(it) } },
-                    gyroscopeData = gyroscopeData
-                )
+                if (userName.isNullOrBlank()) {
+                    WelcomeScreen { name ->
+                        coroutineScope.launch {
+                            themePreferenceManager.setUserName(name)
+                        }
+                    }
+                } else {
+                    ProjektApp(
+                        userName = userName!!,
+                        useDarkTheme = isDarkTheme,
+                        onThemeToggle = { coroutineScope.launch { themePreferenceManager.setDarkTheme(it) } },
+                        useMetric = isMetric,
+                        onMetricToggle = { coroutineScope.launch { themePreferenceManager.setMetric(it) } },
+                        steps = steps,
+                        stepGoal = stepGoal,
+                        onStepGoalChange = { coroutineScope.launch { themePreferenceManager.setStepGoal(it) } },
+                        gyroscopeData = gyroscopeData
+                    )
+                }
             }
         }
     }
@@ -123,7 +137,38 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+fun WelcomeScreen(onNameProvided: (String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Witaj!", style = MaterialTheme.typography.headlineLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Podaj swoje imię, abyśmy mogli Cię przywitać.")
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text("Twoje imię") },
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = { onNameProvided(name) },
+            enabled = name.isNotBlank()
+        ) {
+            Text("Zaczynajmy!")
+        }
+    }
+}
+
+@Composable
 fun ProjektApp(
+    userName: String,
     useDarkTheme: Boolean,
     onThemeToggle: (Boolean) -> Unit,
     useMetric: Boolean,
@@ -133,43 +178,44 @@ fun ProjektApp(
     onStepGoalChange: (Int) -> Unit,
     gyroscopeData: GyroscopeData
 ) {
-    val currentDestinationState = rememberSaveable { mutableStateOf(AppDestinations.HOME) }
-    val currentDestination = currentDestinationState.value
+    var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
 
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            for (destination in AppDestinations.entries) {
-                item(
-                    icon = { Icon(destination.icon, contentDescription = destination.label) },
-                    label = { Text(destination.label) },
-                    selected = destination == currentDestination,
-                    onClick = { currentDestinationState.value = destination }
-                )
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            NavigationBar {
+                AppDestinations.entries.forEach { destination ->
+                    NavigationBarItem(
+                        icon = { Icon(destination.icon, contentDescription = destination.label) },
+                        label = { Text(destination.label) },
+                        selected = destination == currentDestination,
+                        onClick = { currentDestination = destination }
+                    )
+                }
             }
         }
-    ) {
-        Scaffold(modifier = Modifier.fillMaxSize()) { scaffoldPadding ->
-            when (currentDestination) {
-                AppDestinations.HOME -> HomeScreen(
-                    useMetric = useMetric,
-                    steps = steps,
-                    stepGoal = stepGoal,
-                    modifier = Modifier.padding(scaffoldPadding)
-                )
-                AppDestinations.ACCOUNT -> AccountScreen(
-                    currentStepGoal = stepGoal,
-                    onStepGoalChange = onStepGoalChange,
-                    gyroscopeData = gyroscopeData,
-                    modifier = Modifier.padding(scaffoldPadding)
-                )
-                AppDestinations.SETTINGS -> SettingsScreen(
-                    useDarkTheme = useDarkTheme,
-                    onThemeToggle = onThemeToggle,
-                    useMetric = useMetric,
-                    onMetricToggle = onMetricToggle,
-                    modifier = Modifier.padding(scaffoldPadding)
-                )
-            }
+    ) { scaffoldPadding ->
+        when (currentDestination) {
+            AppDestinations.HOME -> HomeScreen(
+                userName = userName,
+                useMetric = useMetric,
+                steps = steps,
+                stepGoal = stepGoal,
+                modifier = Modifier.padding(scaffoldPadding)
+            )
+            AppDestinations.ACCOUNT -> AccountScreen(
+                currentStepGoal = stepGoal,
+                onStepGoalChange = onStepGoalChange,
+                gyroscopeData = gyroscopeData,
+                modifier = Modifier.padding(scaffoldPadding)
+            )
+            AppDestinations.SETTINGS -> SettingsScreen(
+                useDarkTheme = useDarkTheme,
+                onThemeToggle = onThemeToggle,
+                useMetric = useMetric,
+                onMetricToggle = onMetricToggle,
+                modifier = Modifier.padding(scaffoldPadding)
+            )
         }
     }
 }
@@ -183,11 +229,12 @@ enum class AppDestinations(
     SETTINGS("Ustawienia", Icons.Default.Settings),
 }
 
-@PreviewScreenSizes
+@Preview(showBackground = true)
 @Composable
 fun ProjektAppPreview() {
     ProjektTheme {
         ProjektApp(
+            userName = "Użytkownik",
             useDarkTheme = false,
             onThemeToggle = {},
             useMetric = true,

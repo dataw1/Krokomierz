@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -19,6 +20,7 @@ class ThemePreferenceManager(context: Context) {
         val DARK_THEME_KEY = booleanPreferencesKey("dark_theme_key")
         val IS_METRIC_KEY = booleanPreferencesKey("is_metric_key")
         val STEP_GOAL_KEY = intPreferencesKey("step_goal_key")
+        val USER_NAME_KEY = stringPreferencesKey("user_name_key")
     }
 
     val isDarkTheme: Flow<Boolean> = dataStore.data.map {
@@ -43,5 +45,13 @@ class ThemePreferenceManager(context: Context) {
 
     suspend fun setStepGoal(goal: Int) {
         dataStore.edit { it[STEP_GOAL_KEY] = goal }
+    }
+
+    val userName: Flow<String?> = dataStore.data.map {
+        it[USER_NAME_KEY]
+    }
+
+    suspend fun setUserName(name: String) {
+        dataStore.edit { it[USER_NAME_KEY] = name }
     }
 }

@@ -30,6 +30,7 @@ data class StepData(val label: String, var steps: Int)
 
 @Composable
 fun HomeScreen(
+    userName: String,
     useMetric: Boolean,
     steps: Int,
     stepGoal: Int,
@@ -37,7 +38,6 @@ fun HomeScreen(
 ) {
     var selectedPeriod by remember { mutableStateOf(TimePeriod.DAY) }
     val stepLengthCm = 80 // Długość kroku w cm
-    val caloriesPerStep = 0.04f // Średnia liczba spalonych kalorii na krok
 
     var currentTime by remember { mutableStateOf("") }
     val chartData = remember { mutableStateListOf<StepData>() }
@@ -63,7 +63,7 @@ fun HomeScreen(
     }
     val distanceFormatted = "%.2f".format(distance)
     val distanceUnit = if (useMetric) "km" else "mi"
-    val caloriesBurned = steps * caloriesPerStep
+    val caloriesBurned = steps * 0.04f
 
     Column(
         modifier = modifier
@@ -73,7 +73,11 @@ fun HomeScreen(
     ) {
         Text(
             text = currentTime,
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineMedium
+        )
+        Text(
+            text = "Witaj, $userName!",
+            style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
@@ -232,6 +236,6 @@ private fun updateChartData(chartData: MutableList<StepData>, currentTotalSteps:
 @Composable
 fun HomeScreenPreview() {
     ProjektTheme {
-        HomeScreen(useMetric = true, steps = 12345, stepGoal = 10000)
+        HomeScreen(userName = "Użytkownik", useMetric = true, steps = 12345, stepGoal = 10000)
     }
 }
