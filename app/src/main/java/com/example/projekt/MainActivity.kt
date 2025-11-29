@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Home
@@ -32,11 +33,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.projekt.ui.theme.ProjektTheme
+import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -44,9 +48,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var themePreferenceManager: ThemePreferenceManager
     private lateinit var stepCounter: StepCounter
     private lateinit var gyroscopeManager: GyroscopeManager
+    private val authManager = AuthManager()
 
     private var steps by mutableIntStateOf(0)
     private var gyroscopeData by mutableStateOf(GyroscopeData(0f, 0f, 0f))
+    private var currentUser by mutableStateOf(authManager.getCurrentUser())
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -96,26 +102,45 @@ class MainActivity : ComponentActivity() {
             val coroutineScope = rememberCoroutineScope()
 
             ProjektTheme(darkTheme = isDarkTheme) {
-                if (userName.isNullOrBlank()) {
-                    WelcomeScreen { name ->
-                        coroutineScope.launch {
-                            themePreferenceManager.setUserName(name)
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    if (currentUser == null) {
+                        AuthScreen(
+                            onLogin = { email, password ->
+                                coroutineScope.launch {
+                                    if(authManager.login(email, password)) {
+                                        currentUser = authManager.getCurrentUser()
+                                    }
+                                }
+                            },
+                            onRegister = { name, email, password ->
+                                coroutineScope.launch {
+                                    if(authManager.register(name, email, password)) {
+                                        currentUser = authManager.getCurrentUser()
+                                    }
+                                }
+                            }
+                        )
+                    } else if (userName.isNullOrBlank()) {
+                        WelcomeScreen { name ->
+                            coroutineScope.launch {
+                                themePreferenceManager.setUserName(name)
+                            }
                         }
+                    } else {
+                        ProjektApp(
+                            userName = userName!!,
+                            onUserNameChange = { coroutineScope.launch { themePreferenceManager.setUserName(it) } },
+                            useDarkTheme = isDarkTheme,
+                            onThemeToggle = { coroutineScope.launch { themePreferenceManager.setDarkTheme(it) } },
+                            useMetric = isMetric,
+                            onMetricToggle = { coroutineScope.launch { themePreferenceManager.setMetric(it) } },
+                            steps = steps,
+                            stepGoal = stepGoal,
+                            onStepGoalChange = { coroutineScope.launch { themePreferenceManager.setStepGoal(it) } },
+                            gyroscopeData = gyroscopeData,
+                            onResetName = { coroutineScope.launch { themePreferenceManager.setUserName("") } }
+                        )
                     }
-                } else {
-                    ProjektApp(
-                        userName = userName!!,
-                        onUserNameChange = { coroutineScope.launch { themePreferenceManager.setUserName(it) } },
-                        useDarkTheme = isDarkTheme,
-                        onThemeToggle = { coroutineScope.launch { themePreferenceManager.setDarkTheme(it) } },
-                        useMetric = isMetric,
-                        onMetricToggle = { coroutineScope.launch { themePreferenceManager.setMetric(it) } },
-                        steps = steps,
-                        stepGoal = stepGoal,
-                        onStepGoalChange = { coroutineScope.launch { themePreferenceManager.setStepGoal(it) } },
-                        gyroscopeData = gyroscopeData,
-                        onResetName = { coroutineScope.launch { themePreferenceManager.setUserName("") } }
-                    )
                 }
             }
         }
@@ -137,6 +162,55 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+@Composable
+fun AuthScreen(
+    onLogin: (String, String) -> Unit,
+    onRegister: (String, String, String) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text("Imię") },
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { Text("Email") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Hasło") },
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = { onLogin(email, password) }) {
+            Text("Zaloguj się")
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(onClick = { onRegister(name, email, password) }) {
+            Text("Zarejestruj się")
+        }
+    }
+}
+
 
 @Composable
 fun WelcomeScreen(onNameProvided: (String) -> Unit) {
