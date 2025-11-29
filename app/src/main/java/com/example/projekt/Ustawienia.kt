@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -25,16 +26,15 @@ fun SettingsScreen(
     onThemeToggle: (Boolean) -> Unit,
     useMetric: Boolean,
     onMetricToggle: (Boolean) -> Unit,
-    onResetName: () -> Unit, // Re-adding the callback for resetting the name
+    onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Ustawienia", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(bottom = 16.dp))
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -65,9 +65,11 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Re-adding the Reset Name Button for demonstration purposes
-        Button(onClick = onResetName) {
-            Text("Zresetuj imię (dla dema)")
+        Button(
+            onClick = onLogout,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+        ) {
+            Text("Wyloguj")
         }
     }
 }
@@ -81,7 +83,7 @@ fun SettingsScreenPreview() {
             onThemeToggle = {},
             useMetric = true,
             onMetricToggle = {},
-            onResetName = {} // Add to preview
+            onLogout = {}
         )
     }
 }

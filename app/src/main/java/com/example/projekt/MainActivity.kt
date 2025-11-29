@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -101,34 +102,61 @@ class MainActivity : ComponentActivity() {
 
             val coroutineScope = rememberCoroutineScope()
 
+            // Fetch user name from Firestore after login
+            LaunchedEffect(currentUser) {
+                if (currentUser != null && userName == null) {
+                    coroutineScope.launch {
+                        val name = authManager.getUserName(currentUser!!.uid)
+                        if (name != null) {
+                            themePreferenceManager.setUserName(name)
+                        }
+                    }
+                }
+            }
+
             ProjektTheme(darkTheme = isDarkTheme) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     if (currentUser == null) {
-                        AuthScreen(
-                            onLogin = { email, password ->
-                                coroutineScope.launch {
-                                    if(authManager.login(email, password)) {
-                                        currentUser = authManager.getCurrentUser()
+                        var showRegisterScreen by remember { mutableStateOf(false) }
+                        var authError by remember { mutableStateOf<String?>(null) }
+
+                        if (showRegisterScreen) {
+                            RegisterScreen(
+                                onRegister = { name, email, password ->
+                                    coroutineScope.launch {
+                                        val error = authManager.register(name, email, password)
+                                        if (error == null) {
+                                            themePreferenceManager.setUserName(name) // Save name locally right away
+                                            currentUser = authManager.getCurrentUser()
+                                        } else {
+                                            authError = error
+                                        }
                                     }
-                                }
-                            },
-                            onRegister = { name, email, password ->
-                                coroutineScope.launch {
-                                    if(authManager.register(name, email, password)) {
-                                        currentUser = authManager.getCurrentUser()
+                                },
+                                onGoToLogin = { showRegisterScreen = false },
+                                error = authError
+                            )
+                        } else {
+                            LoginScreen(
+                                onLogin = { email, password ->
+                                    coroutineScope.launch {
+                                        val error = authManager.login(email, password)
+                                        if (error == null) {
+                                            currentUser = authManager.getCurrentUser()
+                                        } else {
+                                            authError = error
+                                        }
                                     }
-                                }
-                            }
-                        )
-                    } else if (userName.isNullOrBlank()) {
-                        WelcomeScreen { name ->
-                            coroutineScope.launch {
-                                themePreferenceManager.setUserName(name)
-                            }
+                                },
+                                onGoToRegister = { showRegisterScreen = true },
+                                error = authError
+                            )
                         }
+
                     } else {
+                        val finalUserName = userName ?: "Użytkownik"
                         ProjektApp(
-                            userName = userName!!,
+                            userName = finalUserName,
                             onUserNameChange = { coroutineScope.launch { themePreferenceManager.setUserName(it) } },
                             useDarkTheme = isDarkTheme,
                             onThemeToggle = { coroutineScope.launch { themePreferenceManager.setDarkTheme(it) } },
@@ -138,7 +166,7 @@ class MainActivity : ComponentActivity() {
                             stepGoal = stepGoal,
                             onStepGoalChange = { coroutineScope.launch { themePreferenceManager.setStepGoal(it) } },
                             gyroscopeData = gyroscopeData,
-                            onResetName = { coroutineScope.launch { themePreferenceManager.setUserName("") } }
+                            onLogout = { coroutineScope.launch { authManager.logout(); currentUser = null; themePreferenceManager.setUserName("") } }
                         )
                     }
                 }
@@ -164,13 +192,18 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AuthScreen(
+fun LoginScreen(
     onLogin: (String, String) -> Unit,
-    onRegister: (String, String, String) -> Unit
+    onGoToRegister: () -> Unit,
+    error: String?
 ) {
-    var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var isEmailValid by remember { mutableStateOf(true) }
+
+    fun validateEmail() {
+        isEmailValid = email.contains("@")
+    }
 
     Column(
         modifier = Modifier
@@ -179,18 +212,15 @@ fun AuthScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text("Imię") },
-            singleLine = true
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+        Text("Logowanie", style = MaterialTheme.typography.headlineLarge)
+        Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = { email = it; validateEmail() },
             label = { Text("Email") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            isError = !isEmailValid,
+            supportingText = { if (!isEmailValid) Text("Niepoprawny format e-mail") }
         )
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
@@ -201,48 +231,82 @@ fun AuthScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = { onLogin(email, password) }) {
+        Button(onClick = { onLogin(email, password) }, enabled = isEmailValid) {
             Text("Zaloguj się")
         }
+        error?.let {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(it, color = MaterialTheme.colorScheme.error)
+        }
         Spacer(modifier = Modifier.height(8.dp))
-        Button(onClick = { onRegister(name, email, password) }) {
-            Text("Zarejestruj się")
+        TextButton(onClick = onGoToRegister) {
+            Text("Nie masz konta? Zarejestruj się")
         }
     }
 }
-
 
 @Composable
-fun WelcomeScreen(onNameProvided: (String) -> Unit) {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        var name by remember { mutableStateOf("") }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text("Witaj!", style = MaterialTheme.typography.headlineLarge)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Podaj swoje imię, abyśmy mogli Cię przywitać.")
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Twoje imię") },
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = { onNameProvided(name) },
-                enabled = name.isNotBlank()
-            ) {
-                Text("Zaczynajmy!")
-            }
+fun RegisterScreen(
+    onRegister: (String, String, String) -> Unit,
+    onGoToLogin: () -> Unit,
+    error: String?
+) {
+    var name by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var isEmailValid by remember { mutableStateOf(true) }
+
+    fun validateEmail() {
+        isEmailValid = email.contains("@")
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Rejestracja", style = MaterialTheme.typography.headlineLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text("Imię") },
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it; validateEmail() },
+            label = { Text("Email") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            isError = !isEmailValid,
+            supportingText = { if (!isEmailValid) Text("Niepoprawny format e-mail") }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Hasło") },
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = { onRegister(name, email, password) }, enabled = isEmailValid) {
+            Text("Zarejestruj się")
+        }
+        error?.let {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(it, color = MaterialTheme.colorScheme.error)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        TextButton(onClick = onGoToLogin) {
+            Text("Masz już konto? Zaloguj się")
         }
     }
 }
+
 
 @Composable
 fun ProjektApp(
@@ -256,7 +320,7 @@ fun ProjektApp(
     stepGoal: Int,
     onStepGoalChange: (Int) -> Unit,
     gyroscopeData: GyroscopeData,
-    onResetName: () -> Unit
+    onLogout: () -> Unit
 ) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
 
@@ -296,7 +360,7 @@ fun ProjektApp(
                 onThemeToggle = onThemeToggle,
                 useMetric = useMetric,
                 onMetricToggle = onMetricToggle,
-                onResetName = onResetName,
+                onLogout = onLogout,
                 modifier = Modifier.padding(scaffoldPadding)
             )
         }
@@ -327,7 +391,7 @@ fun ProjektAppPreview() {
             stepGoal = 10000,
             onStepGoalChange = {},
             gyroscopeData = GyroscopeData(0.1f, 0.2f, 0.3f),
-            onResetName = {}
+            onLogout = {}
         )
     }
 }

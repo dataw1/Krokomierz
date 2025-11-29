@@ -14,16 +14,16 @@ class AuthManager {
 
     fun getCurrentUser() = auth.currentUser
 
-    suspend fun login(email: String, password: String): Boolean {
+    suspend fun login(email: String, password: String): String? {
         return try {
             auth.signInWithEmailAndPassword(email, password).await()
-            true
+            null // Success
         } catch (e: Exception) {
-            false
+            e.message // Return error message on failure
         }
     }
 
-    suspend fun register(name: String, email: String, password: String): Boolean {
+    suspend fun register(name: String, email: String, password: String): String? {
         return try {
             val authResult = auth.createUserWithEmailAndPassword(email, password).await()
             val firebaseUser = authResult.user
@@ -34,9 +34,22 @@ class AuthManager {
                 )
                 db.collection("users").document(firebaseUser.uid).set(user).await()
             }
-            true
+            null // Success
         } catch (e: Exception) {
-            false
+            e.message // Return error message on failure
         }
+    }
+
+    suspend fun getUserName(uid: String): String? {
+        return try {
+            val document = db.collection("users").document(uid).get().await()
+            document.getString("name")
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun logout() {
+        auth.signOut()
     }
 }
