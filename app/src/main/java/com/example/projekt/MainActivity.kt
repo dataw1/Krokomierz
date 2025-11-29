@@ -44,9 +44,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var themePreferenceManager: ThemePreferenceManager
     private lateinit var stepCounter: StepCounter
     private lateinit var gyroscopeManager: GyroscopeManager
+    private val authManager = AuthManager()
 
     private var steps by mutableIntStateOf(0)
     private var gyroscopeData by mutableStateOf(GyroscopeData(0f, 0f, 0f))
+    private var currentUser by mutableStateOf(authManager.getCurrentUser())
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -96,7 +98,25 @@ class MainActivity : ComponentActivity() {
             val coroutineScope = rememberCoroutineScope()
 
             ProjektTheme(darkTheme = isDarkTheme) {
-                if (userName.isNullOrBlank()) {
+                if (currentUser == null) {
+                    AuthScreen(
+                        onLogin = {
+                            email, password ->
+                            coroutineScope.launch {
+                                if(authManager.login(email, password)) {
+                                    currentUser = authManager.getCurrentUser()
+                                }
+                            }
+                        },
+                        onRegister = { email, password ->
+                            coroutineScope.launch {
+                                if(authManager.register(email, password)) {
+                                    currentUser = authManager.getCurrentUser()
+                                }
+                            }
+                        }
+                    )
+                } else if (userName.isNullOrBlank()) {
                     WelcomeScreen { name ->
                         coroutineScope.launch {
                             themePreferenceManager.setUserName(name)
