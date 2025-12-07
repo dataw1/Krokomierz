@@ -41,8 +41,12 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.projekt.ui.theme.ProjektTheme
-import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.database.ktx.database
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+data class UserActivityData(val name: String, val steps: Int, val distance: Double, val calories: Float)
 
 class MainActivity : ComponentActivity() {
 
@@ -50,6 +54,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var stepCounter: StepCounter
     private lateinit var gyroscopeManager: GyroscopeManager
     private val authManager = AuthManager()
+    private val database by lazy { Firebase.database }
 
     private var steps by mutableIntStateOf(0)
     private var gyroscopeData by mutableStateOf(GyroscopeData(0f, 0f, 0f))
@@ -174,10 +179,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+
     private fun startStepCounter() {
         lifecycleScope.launch {
             stepCounter.steps.collect { sessionSteps ->
                 steps = sessionSteps
+                currentUser?.let { user ->
+                    val userName = themePreferenceManager.userName.first()
+                    val stepLengthCm = 80
+                    val distance = (sessionSteps * stepLengthCm) / 100_000.0
+                    val calories = sessionSteps * 0.04f
+                    val activityData = UserActivityData(
+                        name = userName ?: "Użytkownik",
+                        steps = sessionSteps,
+                        distance = distance,
+                        calories = calories
+                    )
+                    database.getReference("userActivity").child(user.uid).setValue(activityData)
+                }
             }
         }
     }

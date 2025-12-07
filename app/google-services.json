@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "864556279068",
+    "project_id": "krokomierz-projekt",
+    "storage_bucket": "krokomierz-projekt.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:864556279068:android:973a582a60822b320bc6d9",
+        "android_client_info": {
+          "package_name": "com.example.projekt"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA9Ye59lEVvFHDJBIg6QdYrFVGKUg07d1Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
