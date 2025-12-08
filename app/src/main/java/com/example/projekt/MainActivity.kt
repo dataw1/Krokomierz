@@ -180,24 +180,35 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-
     private fun startStepCounter() {
         lifecycleScope.launch {
+            var lastStepsSaved = 0
+            var lastSaveTime = 0L
+
             stepCounter.steps.collect { sessionSteps ->
+                val currentTime = System.currentTimeMillis()
+                val stepsSinceLastSave = sessionSteps - lastStepsSaved
+
                 steps = sessionSteps
-                currentUser?.let { user ->
-                    val userName = themePreferenceManager.userName.first()
+
+                if (currentUser != null && (stepsSinceLastSave >= 20 || currentTime - lastSaveTime > 300_000)) {
+                    val userName = themePreferenceManager.userName.first() ?: "Użytkownik"
                     val stepLengthCm = 80
-                    val distance = (sessionSteps * stepLengthCm) / 100_000.0
-                    val calories = sessionSteps * 0.04f
+                    val distance = (stepsSinceLastSave * stepLengthCm) / 100_000.0
+                    val calories = stepsSinceLastSave * 0.04f
+
                     val activityData = UserActivityData(
-                        name = userName ?: "Użytkownik",
-                        steps = sessionSteps,
+                        name = userName,
+                        steps = stepsSinceLastSave,
                         distance = distance,
                         calories = calories,
                         timestamp = ServerValue.TIMESTAMP
                     )
-                    database.getReference("userActivity").child(user.uid).push().setValue(activityData)
+
+                    database.getReference("userActivity").child(currentUser!!.uid).push().setValue(activityData)
+
+                    lastStepsSaved = sessionSteps
+                    lastSaveTime = currentTime
                 }
             }
         }
