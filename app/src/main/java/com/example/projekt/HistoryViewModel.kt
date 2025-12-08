@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import java.util.Locale
 
 data class HistoryState(
     val hourlyStepsToday: Map<String, Int> = emptyMap(),
@@ -41,45 +40,54 @@ class HistoryViewModel : ViewModel() {
 
             historyRef.addValueEventListener(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
-                    val now = Calendar.getInstance()
-                    val startOfToday = (now.clone() as Calendar).apply {
-                        set(Calendar.HOUR_OF_DAY, 0)
-                        set(Calendar.MINUTE, 0)
-                        set(Calendar.SECOND, 0)
-                        set(Calendar.MILLISECOND, 0)
-                    }.timeInMillis
+                    // 1. Get all records and sort them by timestamp
+                    val allRecords = snapshot.children.mapNotNull {
+                        val ts = it.child("timestamp").getValue(Long::class.java)
+                        val steps = it.child("steps").getValue(Int::class.java)
+                        if (ts != null && steps != null) ts to steps else null
+                    }.sortedBy { it.first }
 
-                    val sevenDaysAgo = (now.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -7) }.timeInMillis
-                    val thirtyDaysAgo = (now.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -30) }.timeInMillis
-
-                    val hourlySteps = mutableMapOf<String, Int>()
-                    val dailySteps = mutableMapOf<Int, Int>()
-                    val weeklySteps = mutableMapOf<Int, Int>()
-
-                    for (child in snapshot.children) {
-                        val timestamp = child.child("timestamp").getValue(Long::class.java) ?: 0
-                        val steps = child.child("steps").getValue(Int::class.java) ?: 0
-                        val recordCalendar = Calendar.getInstance().apply { timeInMillis = timestamp }
-
-                        if (timestamp >= startOfToday) {
-                            val hour = recordCalendar.get(Calendar.HOUR_OF_DAY)
-                            val hourKey = "${hour.toString().padStart(2, '0')}"
-                            hourlySteps[hourKey] = (hourlySteps[hourKey] ?: 0) + steps
-                        }
-
-                        if (timestamp >= sevenDaysAgo) {
-                            val dayOfWeek = recordCalendar.get(Calendar.DAY_OF_WEEK) // Sunday = 1, Saturday = 7
-                            dailySteps[dayOfWeek] = (dailySteps[dayOfWeek] ?: 0) + steps
-                        }
-
-                        if (timestamp >= thirtyDaysAgo) {
-                            val weekOfMonth = recordCalendar.get(Calendar.WEEK_OF_MONTH)
-                            weeklySteps[weekOfMonth] = (weeklySteps[weekOfMonth] ?: 0) + steps
-                        }
+                    if (allRecords.isEmpty()) {
+                        _historyState.value = HistoryState(isLoading = false)
+                        return
                     }
 
+                    // 2. Group records by different time windows
+                    val now = Calendar.getInstance()
+                    val todayStartCal = (now.clone() as Calendar).apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
+                    val sevenDaysAgoCal = (now.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -7) }
+                    val thirtyDaysAgoCal = (now.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -30) }
+
+                    // HOURLY
+                    val todayRecords = allRecords.filter { it.first >= todayStartCal.timeInMillis }
+                    val hourlySteps = todayRecords.groupBy {
+                        val cal = Calendar.getInstance().apply { timeInMillis = it.first }
+                        cal.get(Calendar.HOUR_OF_DAY)
+                    }.mapValues { (_, records) ->
+                        calculateTrueSteps(records)
+                    }.mapKeys { "${it.key.toString().padStart(2, '0')}:00" }.toSortedMap()
+
+                    // DAILY
+                    val lastWeekRecords = allRecords.filter { it.first >= sevenDaysAgoCal.timeInMillis }
+                    val dailySteps = lastWeekRecords.groupBy {
+                        val cal = Calendar.getInstance().apply { timeInMillis = it.first }
+                        cal.get(Calendar.DAY_OF_WEEK)
+                    }.mapValues { (_, records) ->
+                        calculateTrueSteps(records)
+                    }
+
+                    // WEEKLY
+                    val lastMonthRecords = allRecords.filter { it.first >= thirtyDaysAgoCal.timeInMillis }
+                    val weeklySteps = lastMonthRecords.groupBy {
+                        val cal = Calendar.getInstance().apply { timeInMillis = it.first }
+                        cal.get(Calendar.WEEK_OF_MONTH)
+                    }.mapValues { (_, records) ->
+                        calculateTrueSteps(records)
+                    }
+
+                    // 3. Update state
                     _historyState.value = HistoryState(
-                        hourlyStepsToday = hourlySteps.toSortedMap(),
+                        hourlyStepsToday = hourlySteps,
                         dailyStepsLastWeek = mapDays(dailySteps),
                         weeklyStepsLastMonth = weeklySteps.mapKeys { "Tydzień ${it.key}" }.toSortedMap(),
                         isLoading = false
@@ -92,31 +100,30 @@ class HistoryViewModel : ViewModel() {
             })
         }
     }
+    
+    private fun calculateTrueSteps(records: List<Pair<Long, Int>>): Int {
+        if (records.isEmpty()) return 0
+        var total = 0
+        var lastSteps = 0
+        for ((_, steps) in records) {
+            if (steps < lastSteps) { // New session detected
+                total += lastSteps
+            }
+            lastSteps = steps
+        }
+        total += lastSteps // Add the last/current session's steps
+        return total
+    }
 
     private fun mapDays(dailySteps: Map<Int, Int>): Map<String, Int> {
-        val dayMapping = listOf(
-            Calendar.MONDAY to "Pon",
-            Calendar.TUESDAY to "Wto",
-            Calendar.WEDNESDAY to "Śro",
-            Calendar.THURSDAY to "Czw",
-            Calendar.FRIDAY to "Pią",
-            Calendar.SATURDAY to "Sob",
-            Calendar.SUNDAY to "Nie"
-        )
-        
-        val remapped = dailySteps.mapKeys { 
-            when(it.key) {
-                Calendar.MONDAY -> "Pon"
-                Calendar.TUESDAY -> "Wto"
-                Calendar.WEDNESDAY -> "Śro"
-                Calendar.THURSDAY -> "Czw"
-                Calendar.FRIDAY -> "Pią"
-                Calendar.SATURDAY -> "Sob"
-                Calendar.SUNDAY -> "Nie"
-                else -> ""
-            }
-        }
-
-        return dayMapping.map { it.second to (remapped[it.second] ?: 0) }.toMap()
+        val orderedResult = linkedMapOf<String, Int>()
+        orderedResult["Pon"] = dailySteps[Calendar.MONDAY] ?: 0
+        orderedResult["Wto"] = dailySteps[Calendar.TUESDAY] ?: 0
+        orderedResult["Śro"] = dailySteps[Calendar.WEDNESDAY] ?: 0
+        orderedResult["Czw"] = dailySteps[Calendar.THURSDAY] ?: 0
+        orderedResult["Pią"] = dailySteps[Calendar.FRIDAY] ?: 0
+        orderedResult["Sob"] = dailySteps[Calendar.SATURDAY] ?: 0
+        orderedResult["Nie"] = dailySteps[Calendar.SUNDAY] ?: 0
+        return orderedResult
     }
 }

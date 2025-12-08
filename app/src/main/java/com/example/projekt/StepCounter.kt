@@ -28,10 +28,18 @@ class StepCounter(private val context: Context) {
         val stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
 
         if (stepSensor != null) {
-            // Use the optimized step counter sensor if available
             val listener = object : SensorEventListener {
+                private var initialSteps = -1
+
                 override fun onSensorChanged(event: SensorEvent?) {
-                    event?.let { launch { send(it.values[0].toInt()) } }
+                    event?.let {
+                        val totalSteps = it.values[0].toInt()
+                        if (initialSteps == -1) {
+                            initialSteps = totalSteps
+                        }
+                        val sessionSteps = totalSteps - initialSteps
+                        launch { send(sessionSteps) }
+                    }
                 }
                 override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
             }
@@ -44,7 +52,7 @@ class StepCounter(private val context: Context) {
                 var stepCount = 0
                 var lastPeakTime: Long = 0
                 var isPeak = false
-                val upperThreshold = 11.5f // Adjusted for emulator sensitivity
+                val upperThreshold = 11.5f
                 val lowerThreshold = 10.5f
 
                 val listener = object : SensorEventListener {
