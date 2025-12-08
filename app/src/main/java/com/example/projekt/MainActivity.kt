@@ -41,12 +41,13 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.projekt.ui.theme.ProjektTheme
+import com.google.firebase.database.ServerValue
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-data class UserActivityData(val name: String, val steps: Int, val distance: Double, val calories: Float)
+data class UserActivityData(val name: String, val steps: Int, val distance: Double, val calories: Float, val timestamp: Any)
 
 class MainActivity : ComponentActivity() {
 
@@ -193,9 +194,10 @@ class MainActivity : ComponentActivity() {
                         name = userName ?: "Użytkownik",
                         steps = sessionSteps,
                         distance = distance,
-                        calories = calories
+                        calories = calories,
+                        timestamp = ServerValue.TIMESTAMP
                     )
-                    database.getReference("userActivity").child(user.uid).setValue(activityData)
+                    database.getReference("userActivity").child(user.uid).push().setValue(activityData)
                 }
             }
         }
