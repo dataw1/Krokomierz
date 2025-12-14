@@ -1,71 +1,54 @@
 package com.example.projekt
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
 import com.example.projekt.ui.theme.ProjektTheme
-import com.google.firebase.database.ServerValue
-import com.google.firebase.database.ktx.database
-import com.google.firebase.ktx.Firebase
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-
-data class UserActivityData(val name: String, val steps: Int, val distance: Double, val calories: Float, val timestamp: Any)
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var themePreferenceManager: ThemePreferenceManager
-    private lateinit var stepCounter: StepCounter
     private lateinit var gyroscopeManager: GyroscopeManager
     private val authManager = AuthManager()
-    private val database by lazy { Firebase.database }
-
-    private var steps by mutableIntStateOf(0)
-    private var gyroscopeData by mutableStateOf(GyroscopeData(0f, 0f, 0f))
-    private var currentUser by mutableStateOf(authManager.getCurrentUser())
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            startStepCounter()
+            authManager.getCurrentUser()?.uid?.let { startStepCounterService(it) }
+        }
+    }
+
+    private val postNotificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            authManager.getCurrentUser()?.uid?.let { checkActivityRecognitionPermission(it) }
         }
     }
 
@@ -73,49 +56,36 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         themePreferenceManager = ThemePreferenceManager(applicationContext)
-        stepCounter = StepCounter(applicationContext)
         gyroscopeManager = GyroscopeManager(applicationContext)
-
-        if (stepCounter.isSensorAvailable()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val hasPermission = ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.ACTIVITY_RECOGNITION
-                ) == PackageManager.PERMISSION_GRANTED
-
-                if (hasPermission) {
-                    startStepCounter()
-                } else {
-                    requestPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
-                }
-            } else {
-                startStepCounter()
-            }
-        }
-
-        if (gyroscopeManager.isGyroscopeAvailable()) {
-            startGyroscope()
-        }
 
         enableEdgeToEdge()
         setContent {
-            val isDarkTheme by themePreferenceManager.isDarkTheme.collectAsState(
-                initial = isSystemInDarkTheme()
-            )
+            val isDarkTheme by themePreferenceManager.isDarkTheme.collectAsState(initial = isSystemInDarkTheme())
             val isMetric by themePreferenceManager.isMetric.collectAsState(initial = true)
             val stepGoal by themePreferenceManager.stepGoal.collectAsState(initial = 10000)
             val userName by themePreferenceManager.userName.collectAsState(initial = null)
+            val steps by themePreferenceManager.steps.collectAsState(initial = 0)
+            var gyroscopeData by remember { mutableStateOf(GyroscopeData(0f, 0f, 0f)) }
+            var currentUser by remember { mutableStateOf(authManager.getCurrentUser()) }
 
             val coroutineScope = rememberCoroutineScope()
 
-            // Fetch user name from Firestore after login
             LaunchedEffect(currentUser) {
-                if (currentUser != null && userName == null) {
-                    coroutineScope.launch {
-                        val name = authManager.getUserName(currentUser!!.uid)
-                        if (name != null) {
-                            themePreferenceManager.setUserName(name)
-                        }
+                if (currentUser == null) {
+                    themePreferenceManager.setLastUserId(null)
+                    stopService(Intent(this@MainActivity, StepCounterService::class.java))
+                } else {
+                    val userId = currentUser!!.uid
+                    val currentUserName = authManager.getUserName(userId)
+                    themePreferenceManager.setLastUserId(userId)
+                    if (currentUserName != null) {
+                        themePreferenceManager.setUserName(currentUserName)
+                    }
+                    checkAndStartStepCounter(userId)
+                    try {
+                        gyroscopeManager.rotationData.collect { gyroscopeData = it }
+                    } catch (e: IllegalStateException) {
+                        Log.w("MainActivity", "Gyroscope not available on this device.")
                     }
                 }
             }
@@ -132,7 +102,6 @@ class MainActivity : ComponentActivity() {
                                     coroutineScope.launch {
                                         val error = authManager.register(name, email, password)
                                         if (error == null) {
-                                            themePreferenceManager.setUserName(name) // Save name locally right away
                                             currentUser = authManager.getCurrentUser()
                                         } else {
                                             authError = error
@@ -158,11 +127,9 @@ class MainActivity : ComponentActivity() {
                                 error = authError
                             )
                         }
-
                     } else {
-                        val finalUserName = userName ?: "Użytkownik"
                         ProjektApp(
-                            userName = finalUserName,
+                            userName = userName ?: "Użytkownik",
                             onUserNameChange = { coroutineScope.launch { themePreferenceManager.setUserName(it) } },
                             useDarkTheme = isDarkTheme,
                             onThemeToggle = { coroutineScope.launch { themePreferenceManager.setDarkTheme(it) } },
@@ -172,7 +139,7 @@ class MainActivity : ComponentActivity() {
                             stepGoal = stepGoal,
                             onStepGoalChange = { coroutineScope.launch { themePreferenceManager.setStepGoal(it) } },
                             gyroscopeData = gyroscopeData,
-                            onLogout = { coroutineScope.launch { authManager.logout(); currentUser = null; themePreferenceManager.setUserName("") } }
+                            onLogout = { coroutineScope.launch { authManager.logout(); currentUser = null } }
                         )
                     }
                 }
@@ -180,45 +147,38 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startStepCounter() {
-        lifecycleScope.launch {
-            var lastStepsSaved = 0
-            var lastSaveTime = 0L
-
-            stepCounter.steps.collect { sessionSteps ->
-                val currentTime = System.currentTimeMillis()
-                val stepsSinceLastSave = sessionSteps - lastStepsSaved
-
-                steps = sessionSteps
-
-                if (currentUser != null && (stepsSinceLastSave >= 20 || currentTime - lastSaveTime > 300_000)) {
-                    val userName = themePreferenceManager.userName.first() ?: "Użytkownik"
-                    val stepLengthCm = 80
-                    val distance = (stepsSinceLastSave * stepLengthCm) / 100_000.0
-                    val calories = stepsSinceLastSave * 0.04f
-
-                    val activityData = UserActivityData(
-                        name = userName,
-                        steps = stepsSinceLastSave,
-                        distance = distance,
-                        calories = calories,
-                        timestamp = ServerValue.TIMESTAMP
-                    )
-
-                    database.getReference("userActivity").child(currentUser!!.uid).push().setValue(activityData)
-
-                    lastStepsSaved = sessionSteps
-                    lastSaveTime = currentTime
-                }
+    private fun checkAndStartStepCounter(userId: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                postNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                checkActivityRecognitionPermission(userId)
             }
+        } else {
+            checkActivityRecognitionPermission(userId)
         }
     }
 
-    private fun startGyroscope() {
-        lifecycleScope.launch {
-            gyroscopeManager.rotationData.collect { data ->
-                gyroscopeData = data
+    private fun checkActivityRecognitionPermission(userId: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+            } else {
+                startStepCounterService(userId)
             }
+        } else {
+            startStepCounterService(userId)
+        }
+    }
+
+    private fun startStepCounterService(userId: String) {
+        val intent = Intent(this, StepCounterService::class.java).apply {
+            putExtra("USER_ID", userId)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
         }
     }
 }
@@ -339,7 +299,6 @@ fun RegisterScreen(
     }
 }
 
-
 @Composable
 fun ProjektApp(
     userName: String,
@@ -406,24 +365,4 @@ enum class AppDestinations(
     HOME("Główna", Icons.Default.Home),
     ACCOUNT("Konto", Icons.Default.AccountBox),
     SETTINGS("Ustawienia", Icons.Default.Settings),
-}
-
-@Preview(showBackground = true)
-@Composable
-fun ProjektAppPreview() {
-    ProjektTheme {
-        ProjektApp(
-            userName = "Użytkownik",
-            onUserNameChange = {},
-            useDarkTheme = false,
-            onThemeToggle = {},
-            useMetric = true,
-            onMetricToggle = {},
-            steps = 12345,
-            stepGoal = 10000,
-            onStepGoalChange = {},
-            gyroscopeData = GyroscopeData(0.1f, 0.2f, 0.3f),
-            onLogout = {}
-        )
-    }
 }

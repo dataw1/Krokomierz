@@ -22,6 +22,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.projekt.ui.theme.ProjektTheme
+import java.util.Locale
 
 @Composable
 fun AccountScreen(
@@ -89,9 +90,9 @@ fun AccountScreen(
         // Gyroscope Section
         Text("Dane z Żyroskopu")
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "Oś X: %.2f rad/s".format(gyroscopeData.x))
-        Text(text = "Oś Y: %.2f rad/s".format(gyroscopeData.y))
-        Text(text = "Oś Z: %.2f rad/s".format(gyroscopeData.z))
+        Text(text = String.format(Locale.US, "Oś X: %.2f rad/s", gyroscopeData.x))
+        Text(text = String.format(Locale.US, "Oś Y: %.2f rad/s", gyroscopeData.y))
+        Text(text = String.format(Locale.US, "Oś Z: %.2f rad/s", gyroscopeData.z))
     }
 }
 

@@ -20,17 +20,26 @@ class ThemePreferenceManager(context: Context) {
     private val dataStore = context.dataStore
 
     companion object {
+        // UI Preferences
         val DARK_THEME_KEY = booleanPreferencesKey("dark_theme_key")
         val IS_METRIC_KEY = booleanPreferencesKey("is_metric_key")
         val STEP_GOAL_KEY = intPreferencesKey("step_goal_key")
         val USER_NAME_KEY = stringPreferencesKey("user_name_key")
+        val LAST_USER_ID_KEY = stringPreferencesKey("last_user_id")
 
-        // Keys for persisting step counter state
-        val KEY_INITIAL_STEPS = intPreferencesKey("initial_steps")
+        // State for StepCounter internal logic
+        val KEY_INITIAL_STEPS_FOR_SESSION = intPreferencesKey("initial_steps_for_session")
         val KEY_LAST_COUNT_DATE = stringPreferencesKey("last_count_date")
-        val KEY_PREVIOUS_DAY_STEPS = intPreferencesKey("previous_day_steps")
+        
+        // State for UI to observe
+        val KEY_STEPS_FOR_UI = intPreferencesKey("steps_for_ui")
+
+        // State for Firebase sync logic
+        val KEY_DATE_FOR_SAVED_STEPS_FIREBASE = stringPreferencesKey("date_for_saved_steps_firebase")
+        val KEY_STEPS_SAVED_ON_DATE_FIREBASE = intPreferencesKey("steps_saved_on_date_firebase")
     }
 
+    // --- UI Preferences ---
     val isDarkTheme: Flow<Boolean> = dataStore.data.map { it[DARK_THEME_KEY] ?: false }
     suspend fun setDarkTheme(isDark: Boolean) = dataStore.edit { it[DARK_THEME_KEY] = isDark }
 
@@ -42,22 +51,38 @@ class ThemePreferenceManager(context: Context) {
 
     val userName: Flow<String?> = dataStore.data.map { it[USER_NAME_KEY] }
     suspend fun setUserName(name: String) = dataStore.edit { it[USER_NAME_KEY] = name }
-
-    // Flow for step counter data
-    val initialSteps: Flow<Int> = dataStore.data.map { it[KEY_INITIAL_STEPS] ?: 0 }
-    val lastCountDate: Flow<String> = dataStore.data.map { it[KEY_LAST_COUNT_DATE] ?: "" }
-    val previousDaySteps: Flow<Int> = dataStore.data.map { it[KEY_PREVIOUS_DAY_STEPS] ?: 0 }
-
-    suspend fun saveStepCounterState(initial: Int, date: String, previousSteps: Int) {
+    
+    val lastUserId: Flow<String?> = dataStore.data.map { it[LAST_USER_ID_KEY] }
+    suspend fun setLastUserId(userId: String?) {
         dataStore.edit {
-            it[KEY_INITIAL_STEPS] = initial
-            it[KEY_LAST_COUNT_DATE] = date
-            it[KEY_PREVIOUS_DAY_STEPS] = previousSteps
+            if (userId == null) it.remove(LAST_USER_ID_KEY) else it[LAST_USER_ID_KEY] = userId
         }
     }
 
-    fun getTodayDateString(): String {
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        return sdf.format(Date())
+    // --- Step Counter State ---
+    val steps: Flow<Int> = dataStore.data.map { it[KEY_STEPS_FOR_UI] ?: 0 }
+    suspend fun updateUiSteps(newSteps: Int) {
+        dataStore.edit { it[KEY_STEPS_FOR_UI] = newSteps }
     }
+    
+    val initialSteps: Flow<Int> = dataStore.data.map { it[KEY_INITIAL_STEPS_FOR_SESSION] ?: 0 }
+    val lastCountDate: Flow<String> = dataStore.data.map { it[KEY_LAST_COUNT_DATE] ?: "" }
+    suspend fun saveStepCounterSessionState(initial: Int, date: String) {
+        dataStore.edit {
+            it[KEY_INITIAL_STEPS_FOR_SESSION] = initial
+            it[KEY_LAST_COUNT_DATE] = date
+        }
+    }
+
+    // --- Firebase Sync State ---
+    val dateForSavedSteps: Flow<String> = dataStore.data.map { it[KEY_DATE_FOR_SAVED_STEPS_FIREBASE] ?: "" }
+    val stepsSavedOnDate: Flow<Int> = dataStore.data.map { it[KEY_STEPS_SAVED_ON_DATE_FIREBASE] ?: 0 }
+    suspend fun updateFirebaseSavedSteps(date: String, steps: Int) {
+        dataStore.edit {
+            it[KEY_DATE_FOR_SAVED_STEPS_FIREBASE] = date
+            it[KEY_STEPS_SAVED_ON_DATE_FIREBASE] = steps
+        }
+    }
+
+    fun getTodayDateString(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 }
