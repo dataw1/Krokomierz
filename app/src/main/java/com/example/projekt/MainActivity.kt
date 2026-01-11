@@ -16,6 +16,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -52,6 +54,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val locationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        when {
+            permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) -> {
+                // Precise location access granted.
+            }
+            permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false) -> {
+                // Only approximate location access granted.
+            }
+            else -> {
+                // No location access granted.
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -82,6 +100,7 @@ class MainActivity : ComponentActivity() {
                         themePreferenceManager.setUserName(currentUserName)
                     }
                     checkAndStartStepCounter(userId)
+                    checkLocationPermissions()
                     try {
                         gyroscopeManager.rotationData.collect { gyroscopeData = it }
                     } catch (e: IllegalStateException) {
@@ -144,6 +163,15 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    private fun checkLocationPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            locationPermissionLauncher.launch(arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ))
         }
     }
 
@@ -338,6 +366,12 @@ fun ProjektApp(
                 stepGoal = stepGoal,
                 modifier = Modifier.padding(scaffoldPadding)
             )
+            AppDestinations.MAP -> MapRouteScreen(
+                modifier = Modifier.padding(scaffoldPadding)
+            )
+            AppDestinations.HISTORY -> HistoryScreen(
+                modifier = Modifier.padding(scaffoldPadding)
+            )
             AppDestinations.ACCOUNT -> AccountScreen(
                 userName = userName,
                 onUserNameChange = onUserNameChange,
@@ -363,6 +397,8 @@ enum class AppDestinations(
     val icon: ImageVector,
 ) {
     HOME("Główna", Icons.Default.Home),
+    MAP("Mapa", Icons.Default.Place),
+    HISTORY("Historia", Icons.Default.List),
     ACCOUNT("Konto", Icons.Default.AccountBox),
     SETTINGS("Ustawienia", Icons.Default.Settings),
 }

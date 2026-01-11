@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Projekt</string>
+    <string name="google_maps_key">TWOJ_KLUCZ_API_MAPS</string>
 </resources>

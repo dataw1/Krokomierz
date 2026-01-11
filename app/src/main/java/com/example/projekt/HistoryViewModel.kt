@@ -17,6 +17,7 @@ data class HistoryState(
     val hourlyStepsToday: Map<String, Int> = emptyMap(),
     val dailyStepsLastWeek: Map<String, Int> = emptyMap(),
     val weeklyStepsLastMonth: Map<String, Int> = emptyMap(),
+    val routes: List<RouteData> = emptyList(),
     val isLoading: Boolean = true,
     val error: String? = null
 )
@@ -31,6 +32,7 @@ class HistoryViewModel : ViewModel() {
 
     init {
         fetchHistory()
+        fetchRoutes()
     }
 
     private fun fetchHistory() {
@@ -75,7 +77,7 @@ class HistoryViewModel : ViewModel() {
                         }
                     }
 
-                    _historyState.value = HistoryState(
+                    _historyState.value = _historyState.value.copy(
                         hourlyStepsToday = hourlySteps.toSortedMap(),
                         dailyStepsLastWeek = mapDays(dailySteps),
                         weeklyStepsLastMonth = weeklySteps.mapKeys { "Tydzień ${it.key}" }.toSortedMap(),
@@ -84,9 +86,45 @@ class HistoryViewModel : ViewModel() {
                 }
 
                 override fun onCancelled(error: DatabaseError) {
-                    _historyState.value = HistoryState(isLoading = false, error = error.message)
+                    _historyState.value = _historyState.value.copy(isLoading = false, error = error.message)
                 }
             })
+        }
+    }
+
+    private fun fetchRoutes() {
+        val userId = auth.currentUser?.uid ?: return
+        val routesRef = database.getReference("userRoutes").child(userId)
+
+        routesRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val routesList = mutableListOf<RouteData>()
+                for (child in snapshot.children) {
+                    val route = child.getValue(RouteData::class.java)
+                    if (route != null) {
+                        routesList.add(route.copy(id = child.key ?: ""))
+                    }
+                }
+                _historyState.value = _historyState.value.copy(routes = routesList.sortedByDescending { it.timestamp })
+            }
+
+            override fun onCancelled(error: DatabaseError) {}
+        })
+    }
+
+    fun saveRoute(name: String, points: List<MyLatLng>, distance: Double) {
+        viewModelScope.launch {
+            val userId = auth.currentUser?.uid ?: return@launch
+            val routesRef = database.getReference("userRoutes").child(userId)
+            val newRouteRef = routesRef.push()
+            val routeData = RouteData(
+                id = newRouteRef.key ?: "",
+                name = name,
+                points = points,
+                timestamp = System.currentTimeMillis(),
+                distanceKm = distance
+            )
+            newRouteRef.setValue(routeData)
         }
     }
 
