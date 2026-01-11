@@ -18,6 +18,7 @@ data class HistoryState(
     val dailyStepsLastWeek: Map<String, Int> = emptyMap(),
     val weeklyStepsLastMonth: Map<String, Int> = emptyMap(),
     val routes: List<RouteData> = emptyList(),
+    val selectedRouteForFollowing: RouteData? = null,
     val isLoading: Boolean = true,
     val error: String? = null
 )
@@ -126,6 +127,17 @@ class HistoryViewModel : ViewModel() {
             )
             newRouteRef.setValue(routeData)
         }
+    }
+
+    fun deleteRoute(routeId: String) {
+        viewModelScope.launch {
+            val userId = auth.currentUser?.uid ?: return@launch
+            database.getReference("userRoutes").child(userId).child(routeId).removeValue()
+        }
+    }
+
+    fun selectRouteForFollowing(route: RouteData?) {
+        _historyState.value = _historyState.value.copy(selectedRouteForFollowing = route)
     }
 
     private fun mapDays(dailySteps: Map<Int, Int>): Map<String, Int> {

@@ -370,7 +370,8 @@ fun ProjektApp(
                 modifier = Modifier.padding(scaffoldPadding)
             )
             AppDestinations.HISTORY -> HistoryScreen(
-                modifier = Modifier.padding(scaffoldPadding)
+                modifier = Modifier.padding(scaffoldPadding),
+                onFollowRoute = { currentDestination = AppDestinations.MAP }
             )
             AppDestinations.ACCOUNT -> AccountScreen(
                 userName = userName,
