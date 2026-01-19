@@ -1,3 +1,8 @@
+/**
+ * @file HistoryViewModel.kt
+ * @brief ViewModel zarządzający historią aktywności użytkownika oraz trasami.
+ */
+
 package com.example.projekt
 
 import androidx.lifecycle.ViewModel
@@ -13,6 +18,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
+/**
+ * @struct HistoryState
+ * @brief Stan interfejsu historii aktywności i tras.
+ * 
+ * @property hourlyStepsToday Mapa kroków na godzinę dla bieżącego dnia.
+ * @property dailyStepsLastWeek Mapa kroków dla każdego dnia ostatniego tygodnia.
+ * @property weeklyStepsLastMonth Mapa kroków dla każdego tygodnia ostatniego miesiąca.
+ * @property routes Lista zapisanych tras użytkownika.
+ * @property selectedRouteForFollowing Opcjonalna trasa wybrana do podążania na mapie.
+ * @property isLoading Flaga informująca o trwającym procesie ładowania danych.
+ * @property error Opcjonalny komunikat o błędzie.
+ */
 data class HistoryState(
     val hourlyStepsToday: Map<String, Int> = emptyMap(),
     val dailyStepsLastWeek: Map<String, Int> = emptyMap(),
@@ -23,9 +40,19 @@ data class HistoryState(
     val error: String? = null
 )
 
+/**
+ * @class HistoryViewModel
+ * @brief ViewModel obsługujący pobieranie, zapisywanie i usuwanie danych historycznych z Firebase.
+ * 
+ * Klasa odpowiada za synchronizację danych o krokach oraz trasach GPS z Firebase Realtime Database.
+ */
 class HistoryViewModel : ViewModel() {
 
     private val _historyState = MutableStateFlow(HistoryState())
+    
+    /**
+     * @brief StateFlow emitujący aktualny stan historii.
+     */
     val historyState: StateFlow<HistoryState> = _historyState
 
     private val database = Firebase.database
@@ -36,6 +63,11 @@ class HistoryViewModel : ViewModel() {
         fetchRoutes()
     }
 
+    /**
+     * @brief Pobiera historię kroków użytkownika z Firebase.
+     * 
+     * Przetwarza dane w celu przygotowania statystyk godzinowych, dziennych i tygodniowych.
+     */
     private fun fetchHistory() {
         viewModelScope.launch {
             val userId = auth.currentUser?.uid ?: return@launch
@@ -93,6 +125,9 @@ class HistoryViewModel : ViewModel() {
         }
     }
 
+    /**
+     * @brief Pobiera listę zapisanych tras użytkownika z Firebase.
+     */
     private fun fetchRoutes() {
         val userId = auth.currentUser?.uid ?: return
         val routesRef = database.getReference("userRoutes").child(userId)
@@ -113,6 +148,12 @@ class HistoryViewModel : ViewModel() {
         })
     }
 
+    /**
+     * @brief Zapisuje nową trasę w bazie danych Firebase.
+     * @param name Nazwa trasy.
+     * @param points Lista punktów geograficznych.
+     * @param distance Dystans trasy w kilometrach.
+     */
     fun saveRoute(name: String, points: List<MyLatLng>, distance: Double) {
         viewModelScope.launch {
             val userId = auth.currentUser?.uid ?: return@launch
@@ -129,6 +170,10 @@ class HistoryViewModel : ViewModel() {
         }
     }
 
+    /**
+     * @brief Usuwa zapisaną trasę z bazy danych.
+     * @param routeId Identyfikator trasy do usunięcia.
+     */
     fun deleteRoute(routeId: String) {
         viewModelScope.launch {
             val userId = auth.currentUser?.uid ?: return@launch
@@ -136,10 +181,19 @@ class HistoryViewModel : ViewModel() {
         }
     }
 
+    /**
+     * @brief Wybiera trasę, która ma być wyświetlona na mapie w celu podążania.
+     * @param route Obiekt trasy lub null, aby wyczyścić wybór.
+     */
     fun selectRouteForFollowing(route: RouteData?) {
         _historyState.value = _historyState.value.copy(selectedRouteForFollowing = route)
     }
 
+    /**
+     * @brief Mapuje numery dni tygodnia na polskie skróty.
+     * @param dailySteps Mapa z numerami dni (Calendar).
+     * @return Uporządkowana mapa ze skrótami dni.
+     */
     private fun mapDays(dailySteps: Map<Int, Int>): Map<String, Int> {
         val orderedResult = linkedMapOf<String, Int>()
         orderedResult["Pon"] = dailySteps[Calendar.MONDAY] ?: 0

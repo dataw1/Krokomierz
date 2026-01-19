@@ -1,3 +1,8 @@
+/**
+ * @file Konto.kt
+ * @brief Ekran profilu użytkownika (Konto).
+ */
+
 package com.example.projekt
 
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +29,21 @@ import androidx.compose.ui.unit.dp
 import com.example.projekt.ui.theme.ProjektTheme
 import java.util.Locale
 
+/**
+ * @brief Komponent Compose wyświetlający ekran zarządzania kontem.
+ * 
+ * Umożliwia użytkownikowi:
+ * - Zmianę imienia.
+ * - Ustawienie dziennego celu kroków.
+ * - Podgląd aktualnych danych z żyroskopu.
+ *
+ * @param userName Aktualna nazwa użytkownika.
+ * @param onUserNameChange Callback wywoływany po zapisaniu nowego imienia.
+ * @param currentStepGoal Aktualny dzienny cel kroków.
+ * @param onStepGoalChange Callback wywoływany po zapisaniu nowego celu kroków.
+ * @param gyroscopeData Obiekt z aktualnymi danymi z żyroskopu.
+ * @param modifier Modyfikator układu.
+ */
 @Composable
 fun AccountScreen(
     userName: String,
@@ -96,6 +116,9 @@ fun AccountScreen(
     }
 }
 
+/**
+ * @brief Podgląd ekranu profilu dla środowiska Android Studio.
+ */
 @Preview(showBackground = true)
 @Composable
 fun AccountScreenPreview() {

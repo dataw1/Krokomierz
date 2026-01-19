@@ -1,3 +1,8 @@
+/**
+ * @file StepCounterService.kt
+ * @brief Usługa działająca w tle, odpowiedzialna za ciągłe liczenie kroków i synchronizację z Firebase.
+ */
+
 package com.example.projekt
 
 import android.app.Notification
@@ -18,6 +23,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.tasks.await
 
+/**
+ * @class StepCounterService
+ * @brief Usługa typu Foreground Service do monitorowania aktywności fizycznej.
+ * 
+ * Usługa ta działa niezależnie od interfejsu użytkownika. Odpowiada za:
+ * - Odbieranie danych z czujnika kroków ([StepCounter]).
+ * - Obliczanie kroków wykonanych w bieżącej sesji (dzisiaj).
+ * - Aktualizację powiadomienia o liczbie kroków.
+ * - Synchronizację danych z Firebase Realtime Database w określonych interwałach.
+ */
 class StepCounterService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -38,6 +53,10 @@ class StepCounterService : Service() {
         themePreferenceManager = ThemePreferenceManager(this)
     }
 
+    /**
+     * @brief Wywoływana przy każdym uruchomieniu usługi przez startService().
+     * Inicjalizuje powiadomienie foreground oraz rozpoczyna nasłuchiwanie czujnika.
+     */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIFICATION_ID, createNotification("Rozpoczęto liczenie kroków..."))
 
@@ -53,7 +72,6 @@ class StepCounterService : Service() {
         if (!isTaskRunning) {
             isTaskRunning = true
             serviceScope.launch {
-                // Ensure userId is loaded before starting the listener
                 userId = userId ?: themePreferenceManager.lastUserId.first()
                 if (userId != null) {
                     listenToSteps()
@@ -67,6 +85,12 @@ class StepCounterService : Service() {
         return START_STICKY
     }
 
+    /**
+     * @brief Główna pętla zbierająca dane z czujnika kroków.
+     * 
+     * Przetwarza dane co 2 sekundy, zarządza resetem licznika przy nowym dniu 
+     * lub restarcie urządzenia oraz wysyła dane do Firebase.
+     */
     private fun listenToSteps() {
         serviceScope.launch {
             var lastSaveTime = 0L
@@ -74,14 +98,13 @@ class StepCounterService : Service() {
             var lastCountDate: String? = null
 
             stepCounter.steps
-                .sample(2000) // Process the latest value every 2 seconds to avoid overload
+                .sample(2000)
                 .catch { e ->
                     Log.e("StepCounterService", "Step counter sensor not available or failed.", e)
                     stopSelf()
                 }
                 .collect { totalStepsFromBoot ->
                     try {
-                        // Initialize state from DataStore on the first run
                         if (initialSteps == -1) {
                             initialSteps = themePreferenceManager.initialSteps.first()
                             lastCountDate = themePreferenceManager.lastCountDate.first()
@@ -91,7 +114,6 @@ class StepCounterService : Service() {
                         val deviceRebooted = totalStepsFromBoot < initialSteps
 
                         val sessionSteps = if (todayDate != lastCountDate || deviceRebooted) {
-                            // New day or reboot detected, reset the baseline
                             themePreferenceManager.saveStepCounterSessionState(totalStepsFromBoot, todayDate)
                             initialSteps = totalStepsFromBoot
                             lastCountDate = todayDate
@@ -110,7 +132,7 @@ class StepCounterService : Service() {
                         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
                         notificationManager.notify(NOTIFICATION_ID, createNotification("Dzisiejsze kroki: $sessionSteps"))
 
-                        // --- Firebase Sync Logic ---
+                        // Synchronizacja z Firebase
                         val currentTime = System.currentTimeMillis()
                         val lastSavedDateFirebase = themePreferenceManager.dateForSavedSteps.first()
                         val stepsAlreadySavedToday = if (todayDate == lastSavedDateFirebase) themePreferenceManager.stepsSavedOnDate.first() else 0
@@ -152,6 +174,11 @@ class StepCounterService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /**
+     * @brief Tworzy powiadomienie wymagane dla usługi działającej w trybie foreground.
+     * @param text Treść wyświetlana w powiadomieniu.
+     * @return Skonfigurowany obiekt Notification.
+     */
     private fun createNotification(text: String): Notification {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, "Licznik Kroków", NotificationManager.IMPORTANCE_LOW)
@@ -161,9 +188,9 @@ class StepCounterService : Service() {
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Aktywność")
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // Use a system icon to avoid resource not found issues
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOnlyAlertOnce(true)
-            .setOngoing(true) // Make the notification persistent
+            .setOngoing(true)
             .build()
     }
 }

@@ -1,11 +1,12 @@
 package com.example.projekt
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.location.Location
+import android.annotation.SuppressLint
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -13,17 +14,39 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.PolyUtil
 import com.google.maps.android.compose.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.Locale
 
+/**
+ * @file MapRouteScreen.kt
+ * @brief Ekran mapy umożliwiający planowanie, wyszukiwanie i podążanie trasami.
+ */
+
+/**
+ * @brief Główny komponent interfejsu mapy.
+ * 
+ * Obsługuje:
+ * - Wyświetlanie mapy Google.
+ * - Ręczne dodawanie punktów trasy poprzez kliknięcie.
+ * - Wyszukiwanie lokalizacji startowej i docelowej za pomocą Geocoding API.
+ * - Wyznaczanie trasy wzdłuż dróg za pomocą Directions API.
+ * - Podążanie za wcześniej zapisaną trasą.
+ * - Obliczanie i wyświetlanie dystansu.
+ *
+ * @param modifier Modyfikator układu.
+ * @param historyViewModel ViewModel do zarządzania zapisanymi trasami i stanem wybranej trasy.
+ */
+@SuppressLint("MissingPermission")
 @Composable
 fun MapRouteScreen(
     modifier: Modifier = Modifier,
@@ -32,10 +55,8 @@ fun MapRouteScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val apiKey = "AIzaSyDxk1kBF2tMwyXR3QEu_TfEERAbiTt4AG8"
-    
-    // Dane do autoryzacji nagłówków (pobrane z Twojego błędu Logcat)
     val packageName = "com.example.projekt"
-    val certFingerprint = "FE2D764988055998BC251DB7F27E8581148F7C27" // Bez dwukropków
+    val certFingerprint = "FE2D764988055998BC251DB7F27E8581148F7C27"
 
     val historyState by historyViewModel.historyState.collectAsState()
     val selectedRoute = historyState.selectedRouteForFollowing
@@ -43,8 +64,10 @@ fun MapRouteScreen(
     val markers = remember { mutableStateListOf<LatLng>() }
     val routePoints = remember { mutableStateListOf<LatLng>() }
     var totalDistanceMeters by remember { mutableLongStateOf(0L) }
-    var apiStatusInfo by remember { mutableStateOf<String?>(null) }
-    var fullErrorMsg by remember { mutableStateOf<String?>(null) }
+    
+    var startAddress by remember { mutableStateOf("") }
+    var endAddress by remember { mutableStateOf("") }
+    var isSearching by remember { mutableStateOf(false) }
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(52.2297, 21.0122), 12f)
@@ -58,25 +81,18 @@ fun MapRouteScreen(
             .create(DirectionsService::class.java)
     }
 
-    fun calculateStraightDistance(points: List<LatLng>): Double {
-        var dist = 0.0
-        for (i in 0 until points.size - 1) {
-            val results = FloatArray(1)
-            Location.distanceBetween(points[i].latitude, points[i].longitude, points[i+1].latitude, points[i+1].longitude, results)
-            dist += results[0]
-        }
-        return dist
-    }
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
+    /**
+     * @brief Aktualizuje trasę na mapie na podstawie aktualnych znaczników (markers).
+     * Pobiera dane o przebiegu dróg z Google Directions API.
+     */
     fun updateRoute() {
         if (markers.size < 2) {
             routePoints.clear()
             totalDistanceMeters = 0
-            apiStatusInfo = null
-            fullErrorMsg = null
             return
         }
-
         scope.launch {
             try {
                 val origin = "${markers.first().latitude},${markers.first().longitude}"
@@ -85,56 +101,54 @@ fun MapRouteScreen(
                     "optimize:false|" + markers.subList(1, markers.size - 1).joinToString("|") { "${it.latitude},${it.longitude}" }
                 } else null
 
-                val response = directionsService.getDirections(
-                    packageName = packageName,
-                    certFingerprint = certFingerprint,
-                    origin = origin,
-                    destination = destination,
-                    waypoints = waypoints,
-                    mode = "walking",
-                    apiKey = apiKey
-                )
-
+                val response = directionsService.getDirections(packageName, certFingerprint, origin, destination, waypoints, "walking", apiKey)
                 if (response.status == "OK" && response.routes.isNotEmpty()) {
-                    apiStatusInfo = "OK (Trasa drogowa)"
-                    fullErrorMsg = null
-                    val polyline = response.routes[0].overviewPolyline.points
                     routePoints.clear()
-                    routePoints.addAll(PolyUtil.decode(polyline))
+                    routePoints.addAll(PolyUtil.decode(response.routes[0].overviewPolyline.points))
                     totalDistanceMeters = response.routes[0].legs.sumOf { it.distance.value.toLong() }
-                } else {
-                    apiStatusInfo = "Status: ${response.status}"
-                    fullErrorMsg = response.errorMessage ?: "Brak szczegółów błędu"
-                    routePoints.clear()
-                    routePoints.addAll(markers)
-                    totalDistanceMeters = calculateStraightDistance(markers).toLong()
                 }
             } catch (e: Exception) {
-                apiStatusInfo = "Błąd połączenia"
-                fullErrorMsg = e.message
-                routePoints.clear()
-                routePoints.addAll(markers)
-                totalDistanceMeters = calculateStraightDistance(markers).toLong()
+                Log.e("MapRoute", "Error: ${e.message}")
             }
         }
     }
 
-    LaunchedEffect(selectedRoute) {
-        if (selectedRoute != null) {
-            markers.clear()
-            if (selectedRoute.points.isNotEmpty()) {
-                markers.add(selectedRoute.points.first().toLatLng())
-                if (selectedRoute.points.size > 1) markers.add(selectedRoute.points.last().toLatLng())
+    /**
+     * @brief Funkcja wyszukująca współrzędne dla podanych adresów i wyznaczająca trasę między nimi.
+     * Obsługuje specjalną frazę "moja lokalizacja".
+     */
+    suspend fun searchAndSetRoute() {
+        isSearching = true
+        try {
+            val startLatLng: LatLng? = if (startAddress.lowercase().trim() == "moja lokalizacja") {
+                val location = fusedLocationClient.lastLocation.await()
+                location?.let { LatLng(it.latitude, it.longitude) }
+            } else {
+                val geoResponse = directionsService.geocode(packageName, certFingerprint, startAddress, apiKey)
+                if (geoResponse.status == "OK") {
+                    val loc = geoResponse.results[0].geometry.location
+                    LatLng(loc.lat, loc.lng)
+                } else null
             }
-            routePoints.clear()
-            routePoints.addAll(selectedRoute.points.map { it.toLatLng() })
-            totalDistanceMeters = (selectedRoute.distanceKm * 1000).toLong()
-            cameraPositionState.position = CameraPosition.fromLatLngZoom(routePoints.first(), 15f)
-        }
-    }
 
-    val hasLocationPermission = remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+            val endGeoResponse = directionsService.geocode(packageName, certFingerprint, endAddress, apiKey)
+            val endLatLng: LatLng? = if (endGeoResponse.status == "OK") {
+                val loc = endGeoResponse.results[0].geometry.location
+                LatLng(loc.lat, loc.lng)
+            } else null
+
+            if (startLatLng != null && endLatLng != null) {
+                markers.clear()
+                markers.add(startLatLng)
+                markers.add(endLatLng)
+                updateRoute()
+                cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(startLatLng, 14f))
+            }
+        } catch (e: Exception) {
+            Log.e("MapRoute", "Search Error: ${e.message}")
+        } finally {
+            isSearching = false
+        }
     }
 
     var routeName by remember { mutableStateOf("") }
@@ -144,7 +158,7 @@ fun MapRouteScreen(
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            properties = MapProperties(isMyLocationEnabled = hasLocationPermission.value),
+            properties = MapProperties(isMyLocationEnabled = true),
             uiSettings = MapUiSettings(myLocationButtonEnabled = true, zoomControlsEnabled = true),
             onMapClick = { latLng ->
                 if (selectedRoute == null) {
@@ -157,33 +171,91 @@ fun MapRouteScreen(
                 Polyline(points = routePoints.toList(), color = if (selectedRoute != null) Color(0xFF4CAF50) else Color(0xFF2196F3), width = 12f)
             }
             markers.forEachIndexed { index, latLng ->
-                Marker(state = MarkerState(position = latLng), title = if (index == 0) "Start" else if (index == markers.size - 1) "Koniec" else "Punkt ${index + 1}")
+                Marker(state = MarkerState(position = latLng), title = if (index == 0) "Start" else "Cel")
             }
         }
 
-        Surface(modifier = Modifier.align(Alignment.TopCenter).padding(16.dp), color = Color.Black.copy(alpha = 0.8f), shape = MaterialTheme.shapes.medium) {
-            Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                if (selectedRoute != null) {
-                    Text(text = "Podążasz trasą: ${selectedRoute.name}", color = Color.White)
-                    Button(onClick = { historyViewModel.selectRouteForFollowing(null); markers.clear(); routePoints.clear() }, colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) { Text("Zakończ") }
+        // Panel wyszukiwania
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(16.dp)
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), RoundedCornerShape(12.dp))
+                .padding(12.dp)
+        ) {
+            OutlinedTextField(
+                value = startAddress,
+                onValueChange = { startAddress = it },
+                label = { Text("Od (np. Moja lokalizacja / Ulica)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = endAddress,
+                onValueChange = { endAddress = it },
+                label = { Text("Do (Cel podróży)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = { scope.launch { searchAndSetRoute() } },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isSearching && startAddress.isNotBlank() && endAddress.isNotBlank()
+            ) {
+                if (isSearching) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                 } else {
-                    apiStatusInfo?.let {
-                        Text(text = it, color = if (it.startsWith("OK")) Color.Green else Color.Yellow, style = MaterialTheme.typography.titleSmall)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Wyznacz trasę")
                     }
-                    fullErrorMsg?.let {
-                        Text(text = it, color = Color.Red, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
-                    }
-                    Text(text = "Dystans: ${String.format(Locale.getDefault(), "%.2f", totalDistanceMeters / 1000.0)} km", color = Color.Cyan, style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
 
+        if (totalDistanceMeters > 0) {
+            Surface(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp),
+                color = Color.Black.copy(alpha = 0.7f),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Text(
+                    text = "Dystans: ${String.format(Locale.getDefault(), "%.2f", totalDistanceMeters / 1000.0)} km",
+                    color = Color.Cyan,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+        }
+
         if (selectedRoute == null) {
-            Card(modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp).fillMaxWidth()) {
+            Card(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp).fillMaxWidth()
+            ) {
                 Row(modifier = Modifier.padding(8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     TextButton(onClick = { if (markers.isNotEmpty()) { markers.removeAt(markers.size - 1); updateRoute() } }) { Text("Cofnij") }
                     Button(onClick = { showSaveDialog = true }, enabled = markers.size >= 2) { Text("Zapisz") }
-                    TextButton(onClick = { markers.clear(); routePoints.clear(); totalDistanceMeters = 0 }) { Text("Wyczyść", color = Color.Red) }
+                    TextButton(onClick = { markers.clear(); routePoints.clear(); totalDistanceMeters = 0; startAddress = ""; endAddress = "" }) { Text("Wyczyść", color = Color.Red) }
+                }
+            }
+        } else {
+             Surface(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+                color = Color(0xFF4CAF50),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = "Podążasz trasą: ${selectedRoute.name}", color = Color.White)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Button(
+                        onClick = { historyViewModel.selectRouteForFollowing(null); markers.clear(); routePoints.clear() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+                    ) {
+                        Text("Zakończ")
+                    }
                 }
             }
         }
@@ -193,14 +265,34 @@ fun MapRouteScreen(
         AlertDialog(
             onDismissRequest = { showSaveDialog = false },
             title = { Text("Zapisz trasę") },
-            text = { OutlinedTextField(value = routeName, onValueChange = { routeName = it }, label = { Text("Nazwa trasy") }, modifier = Modifier.fillMaxWidth()) },
+            text = {
+                OutlinedTextField(
+                    value = routeName,
+                    onValueChange = { routeName = it },
+                    label = { Text("Nazwa trasy") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
             confirmButton = {
                 Button(onClick = {
-                    historyViewModel.saveRoute(routeName.ifBlank { "Trasa ${System.currentTimeMillis()}" }, routePoints.map { it.toMyLatLng() }, totalDistanceMeters / 1000.0)
-                    showSaveDialog = false; markers.clear(); routePoints.clear(); routeName = ""
-                }) { Text("Zapisz") }
+                    historyViewModel.saveRoute(
+                        routeName.ifBlank { "Trasa ${System.currentTimeMillis()}" },
+                        routePoints.map { it.toMyLatLng() },
+                        totalDistanceMeters / 1000.0
+                    )
+                    showSaveDialog = false
+                    markers.clear()
+                    routePoints.clear()
+                    routeName = ""
+                }) {
+                    Text("Zapisz")
+                }
             },
-            dismissButton = { TextButton(onClick = { showSaveDialog = false }) { Text("Anuluj") } }
+            dismissButton = {
+                TextButton(onClick = { showSaveDialog = false }) {
+                    Text("Anuluj")
+                }
+            }
         )
     }
 }

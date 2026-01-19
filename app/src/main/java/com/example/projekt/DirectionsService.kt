@@ -15,4 +15,12 @@ interface DirectionsService {
         @Query("mode") mode: String = "walking",
         @Query("key") apiKey: String
     ): DirectionsResponse
+
+    @GET("maps/api/geocode/json")
+    suspend fun geocode(
+        @Header("X-Android-Package") packageName: String,
+        @Header("X-Android-Cert") certFingerprint: String,
+        @Query("address") address: String,
+        @Query("key") apiKey: String
+    ): GeocodingResponse
 }

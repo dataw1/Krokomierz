@@ -16,6 +16,22 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * @file HistoryScreen.kt
+ * @brief Ekran historii aktywności użytkownika.
+ */
+
+/**
+ * @brief Komponent Compose wyświetlający historię kroków oraz zapisane trasy.
+ * 
+ * Funkcja pobiera stan z [HistoryViewModel] i wyświetla statystyki kroków z ostatniego tygodnia
+ * i miesiąca oraz listę tras zapisanych przez użytkownika. Umożliwia usuwanie tras
+ * oraz wybranie trasy do podążania.
+ *
+ * @param modifier Modyfikator układu dla głównego kontenera.
+ * @param historyViewModel ViewModel obsługujący logikę pobierania i usuwania danych historycznych.
+ * @param onFollowRoute Callback wywoływany po wybraniu opcji "Podążaj trasą", zazwyczaj zmienia nawigację na mapę.
+ */
 @Composable
 fun HistoryScreen(
     modifier: Modifier = Modifier,
@@ -105,6 +121,15 @@ fun HistoryScreen(
     }
 }
 
+/**
+ * @brief Komponent wyświetlający pojedynczy element na liście tras.
+ * 
+ * Wyświetla nazwę trasy, datę utworzenia, dystans oraz przyciski akcji (podążanie, usuwanie).
+ *
+ * @param route Dane trasy do wyświetlenia.
+ * @param onDelete Funkcja wywoływana po kliknięciu przycisku usuwania.
+ * @param onFollow Funkcja wywoływana po kliknięciu przycisku podążania za trasą.
+ */
 @Composable
 fun RouteItem(route: RouteData, onDelete: () -> Unit, onFollow: () -> Unit) {
     val sdf = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())

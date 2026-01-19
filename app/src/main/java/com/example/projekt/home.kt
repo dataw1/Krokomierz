@@ -1,3 +1,8 @@
+/**
+ * @file home.kt
+ * @brief Ekran główny aplikacji wyświetlający podsumowanie aktywności.
+ */
+
 package com.example.projekt
 
 import androidx.compose.foundation.layout.*
@@ -16,12 +21,31 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
+/**
+ * @enum TimePeriod
+ * @brief Okresy czasu do wyświetlania statystyk kroków.
+ * 
+ * @property label Etykieta wyświetlana w interfejsie użytkownika.
+ */
 enum class TimePeriod(val label: String) {
     DAY("Dzień"),
     WEEK("Tydzień"),
     MONTH("Miesiąc")
 }
 
+/**
+ * @brief Główny komponent ekranu HomeScreen.
+ * 
+ * Wyświetla powitanie, aktualną datę, przełącznik okresów czasu (Dzień, Tydzień, Miesiąc)
+ * oraz szczegółowe statystyki kroków pobrane z [HistoryViewModel].
+ *
+ * @param userName Imię/nazwa użytkownika.
+ * @param useMetric Czy używać systemu metrycznego (km) czy imperialnego (mi).
+ * @param steps Aktualna liczba kroków z czujnika.
+ * @param stepGoal Dzienny cel kroków.
+ * @param modifier Modyfikator układu.
+ * @param historyViewModel ViewModel dostarczający dane historyczne.
+ */
 @Composable
 fun HomeScreen(
     userName: String,
@@ -103,6 +127,15 @@ fun HomeScreen(
     }
 }
 
+/**
+ * @brief Karta podsumowania dziennej aktywności.
+ * 
+ * Wyświetla liczbę kroków, postęp względem celu, dystans i spalone kalorie.
+ *
+ * @param steps Liczba kroków.
+ * @param stepGoal Cel kroków.
+ * @param useMetric Jednostki miary.
+ */
 @Composable
 fun DailySummaryCard(steps: Int, stepGoal: Int, useMetric: Boolean) {
     val stepLengthCm = 80 // Długość kroku w cm
@@ -148,7 +181,12 @@ fun DailySummaryCard(steps: Int, stepGoal: Int, useMetric: Boolean) {
     }
 }
 
-
+/**
+ * @brief Lista szczegółowa kroków (np. godzinowa lub dzienna).
+ * 
+ * @param data Mapa z etykietą i odpowiadającą jej liczbą kroków.
+ * @param title Tytuł sekcji.
+ */
 @Composable
 fun StepDetailsList(data: Map<String, Int>, title: String) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -178,17 +216,26 @@ fun StepDetailsList(data: Map<String, Int>, title: String) {
     }
 }
 
+/**
+ * @brief Zwraca nazwę bieżącego dnia tygodnia w języku polskim.
+ */
 private fun getCurrentDayOfWeek(): String {
     val calendar = Calendar.getInstance()
     val dateFormat = SimpleDateFormat("EEEE", Locale("pl", "PL"))
     return dateFormat.format(calendar.time).replaceFirstChar { it.titlecase(Locale.ROOT) }
 }
 
+/**
+ * @brief Zwraca numer bieżącego tygodnia w miesiącu.
+ */
 private fun getWeekOfMonth(): Int {
     val calendar = Calendar.getInstance()
     return calendar.get(Calendar.WEEK_OF_MONTH)
 }
 
+/**
+ * @brief Podgląd ekranu HomeScreen dla środowiska Android Studio.
+ */
 @Preview(showBackground = true)
 @Composable
 fun HomeScreenPreview() {

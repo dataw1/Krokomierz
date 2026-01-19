@@ -1,3 +1,8 @@
+/**
+ * @file GpsManager.kt
+ * @brief Klasa zarządzająca odczytami GPS i obliczaniem przebytego dystansu.
+ */
+
 package com.example.projekt
 
 import android.annotation.SuppressLint
@@ -10,12 +15,27 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 
+/**
+ * @class GpsManager
+ * @brief Menedżer lokalizacji GPS.
+ * 
+ * Klasa wykorzystuje FusedLocationProviderClient do śledzenia pozycji użytkownika
+ * w czasie rzeczywistym i obliczania całkowitego przebytego dystansu w metrach.
+ */
 class GpsManager(private val context: Context) {
 
     private val fusedLocationClient: FusedLocationProviderClient by lazy {
         LocationServices.getFusedLocationProviderClient(context)
     }
 
+    /**
+     * @brief Tworzy strumień (Flow) danych o przebytym dystansie.
+     * 
+     * Rejestruje żądania lokalizacji o wysokiej dokładności i oblicza dystans
+     * między kolejnymi punktami geograficznymi.
+     * 
+     * @return Flow emitujący skumulowany dystans w metrach (Float).
+     */
     @SuppressLint("MissingPermission")
     fun getDistanceFlow(): Flow<Float> = callbackFlow {
         var totalDistance = 0f
@@ -46,6 +66,9 @@ class GpsManager(private val context: Context) {
             Looper.getMainLooper()
         )
 
+        /**
+         * @brief Zatrzymuje aktualizacje lokalizacji przy zamknięciu strumienia.
+         */
         awaitClose {
             fusedLocationClient.removeLocationUpdates(locationCallback)
         }

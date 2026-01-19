@@ -32,12 +32,28 @@ import androidx.core.content.ContextCompat
 import com.example.projekt.ui.theme.ProjektTheme
 import kotlinx.coroutines.launch
 
+/**
+ * @file MainActivity.kt
+ * @brief Główna aktywność aplikacji zarządzająca uwierzytelnianiem, uprawnieniami i nawigacją.
+ */
+
+/**
+ * @class MainActivity
+ * @brief Klasa główna aplikacji.
+ * 
+ * Odpowiada za inicjalizację menedżerów (motyw, żyroskop, autoryzacja),
+ * sprawdzanie i prośby o uprawnienia (lokalizacja, powiadomienia, aktywność fizyczna)
+ * oraz wyświetlanie odpowiedniego ekranu (Logowanie/Rejestracja lub Główna Aplikacja).
+ */
 class MainActivity : ComponentActivity() {
 
     private lateinit var themePreferenceManager: ThemePreferenceManager
     private lateinit var gyroscopeManager: GyroscopeManager
     private val authManager = AuthManager()
 
+    /**
+     * @brief Launcher do żądania uprawnienia ACTIVITY_RECOGNITION.
+     */
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -46,6 +62,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * @brief Launcher do żądania uprawnienia POST_NOTIFICATIONS (Android 13+).
+     */
     private val postNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -54,18 +73,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * @brief Launcher do żądania uprawnień lokalizacji (FINE i COARSE).
+     */
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         when {
             permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) -> {
-                // Precise location access granted.
+                Log.d("MainActivity", "Precise location access granted.")
             }
             permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false) -> {
-                // Only approximate location access granted.
-            }
-            else -> {
-                // No location access granted.
+                Log.d("MainActivity", "Approximate location access granted.")
             }
         }
     }
@@ -166,6 +185,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * @brief Sprawdza uprawnienia do lokalizacji i żąda ich w razie potrzeby.
+     */
     private fun checkLocationPermissions() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             locationPermissionLauncher.launch(arrayOf(
@@ -175,6 +197,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * @brief Inicjuje proces sprawdzania uprawnień niezbędnych do licznika kroków.
+     * @param userId Identyfikator zalogowanego użytkownika.
+     */
     private fun checkAndStartStepCounter(userId: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -187,6 +213,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * @brief Sprawdza uprawnienie do rozpoznawania aktywności fizycznej (Android 10+).
+     * @param userId Identyfikator zalogowanego użytkownika.
+     */
     private fun checkActivityRecognitionPermission(userId: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
@@ -199,6 +229,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * @brief Uruchamia usługę [StepCounterService] w tle.
+     * @param userId Identyfikator zalogowanego użytkownika.
+     */
     private fun startStepCounterService(userId: String) {
         val intent = Intent(this, StepCounterService::class.java).apply {
             putExtra("USER_ID", userId)
@@ -211,6 +245,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * @brief Ekran logowania użytkownika.
+ * @param onLogin Funkcja wywoływana przy próbie logowania.
+ * @param onGoToRegister Funkcja zmieniająca ekran na rejestrację.
+ * @param error Komunikat o błędzie autoryzacji.
+ */
 @Composable
 fun LoginScreen(
     onLogin: (String, String) -> Unit,
@@ -265,6 +305,12 @@ fun LoginScreen(
     }
 }
 
+/**
+ * @brief Ekran rejestracji nowego użytkownika.
+ * @param onRegister Funkcja wywoływana przy próbie rejestracji.
+ * @param onGoToLogin Funkcja zmieniająca ekran na logowanie.
+ * @param error Komunikat o błędzie rejestracji.
+ */
 @Composable
 fun RegisterScreen(
     onRegister: (String, String, String) -> Unit,
@@ -327,6 +373,20 @@ fun RegisterScreen(
     }
 }
 
+/**
+ * @brief Główny kontener aplikacji po zalogowaniu, zawierający dolną nawigację.
+ * @param userName Nazwa zalogowanego użytkownika.
+ * @param onUserNameChange Callback zmiany nazwy użytkownika.
+ * @param useDarkTheme Stan ciemnego motywu.
+ * @param onThemeToggle Callback zmiany motywu.
+ * @param useMetric Stan jednostek miary.
+ * @param onMetricToggle Callback zmiany jednostek.
+ * @param steps Aktualna liczba kroków.
+ * @param stepGoal Cel dzienny kroków.
+ * @param onStepGoalChange Callback zmiany celu kroków.
+ * @param gyroscopeData Aktualne dane z żyroskopu.
+ * @param onLogout Funkcja wylogowania.
+ */
 @Composable
 fun ProjektApp(
     userName: String,
@@ -393,6 +453,10 @@ fun ProjektApp(
     }
 }
 
+/**
+ * @enum AppDestinations
+ * @brief Definicja celów podróży w nawigacji dolnej.
+ */
 enum class AppDestinations(
     val label: String,
     val icon: ImageVector,
